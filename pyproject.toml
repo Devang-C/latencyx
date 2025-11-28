@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "latencyx"
+version = "0.1.0"
+description = "Zero-config latency tracking for FastAPI (and later more)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name = "Devang Chavan", email = "devangchavan0204@gmail.com"}]
+keywords = ["monitoring", "observability", "fastapi", "tracing", "latency"]
+
+# Core dependencies (always installed)
+dependencies = [
+    "starlette>=0.27.0",
+]
+
+[project.scripts]
+latencyx = "latencyx.cli:main"
+
+[project.optional-dependencies]
+http = ["httpx>=0.24.0"]
+all = [
+    "httpx>=0.24.0",
+]
+
+[tool.setuptools]
+packages = ["latencyx", "latencyx.exporters", "latencyx.instrumentors"]
