@@ -1,27 +1,31 @@
-from typing import List
-from ..config import config, ExporterType
+import logging
+from typing import Any
 
-_exporters = []
+from ..config import ExporterType, config
 
-def init_exporters():
-    """Initialize all configured exporters"""
+logger = logging.getLogger("latencyx")
+
+_exporters: list[Any] = []
+
+
+def init_exporters() -> None:
     global _exporters
     _exporters = []
-    
+
     for exporter_type in config.exporters:
         if exporter_type == ExporterType.CONSOLE:
             from .console import ConsoleExporter
+
             _exporters.append(ConsoleExporter())
-        
         elif exporter_type == ExporterType.JSON_FILE:
             from .json_file import JsonFileExporter
-            _exporters.append(JsonFileExporter())
-        
 
-def export_span(span):
-    """Export span to all configured exporters"""
+            _exporters.append(JsonFileExporter())
+
+
+def export_span(span: Any) -> None:
     for exporter in _exporters:
         try:
             exporter.export(span)
         except Exception as e:
-            print(f"Error exporting to {exporter.__class__.__name__}: {e}")
+            logger.warning("Error exporting to %s: %s", exporter.__class__.__name__, e)
