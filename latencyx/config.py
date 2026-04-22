@@ -21,6 +21,7 @@ class LatencyXConfig:
     json_file_path: str = "latencyx_traces.jsonl"
     # SQLite is the default local storage — queryable by the CLI commands
     sqlite_path: str = "latencyx_traces.db"
+    service_name: str = "default"
     instrument_fastapi: bool = True
     instrument_http_client: bool = True
     sample_rate: float = 1.0

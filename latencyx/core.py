@@ -2,6 +2,7 @@ import random
 import threading
 import time
 import traceback
+import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, Optional
@@ -27,10 +28,13 @@ class Span:
         self.span_type = span_type
         self.metadata: dict[str, Any] = metadata or {}
         self.start = time.perf_counter()
+        self.started_at: float = time.time()  # Unix epoch — stored in SQLite for range queries
         self.end: Optional[float] = None
         self.duration_ms: Optional[float] = None
         self.error: Optional[str] = None
         self.traceback: Optional[str] = None
+        self.span_id: str = uuid.uuid4().hex  # unique per span
+        self.trace_id: str = uuid.uuid4().hex  # overwritten by timed() when there's a parent
         self.parent: Optional[Span] = None
 
     def finish(self, error: Optional[Exception] = None) -> None:
@@ -67,6 +71,9 @@ def timed(
 
     parent: Optional[Span] = _local.current_span
     span.parent = parent
+    # All spans in the same request share a trace_id — inherit from parent or start a new trace
+    if parent:
+        span.trace_id = parent.trace_id
     _local.current_span = span
 
     try:

@@ -302,6 +302,134 @@ class TestSQLiteExporter:
         conn.close()
         assert count == 1
 
+    def test_export_stores_trace_and_span_ids(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span())
+
+        conn = sqlite3.connect(config.sqlite_path)
+        row = conn.execute("SELECT trace_id, span_id FROM spans").fetchone()
+        conn.close()
+
+        assert row[0] is not None and len(row[0]) == 32  # trace_id
+        assert row[1] is not None and len(row[1]) == 32  # span_id
+
+    def test_export_stores_parent_span_id(self, tmp_path):
+        import sqlite3
+
+        from latencyx.core import Span
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+
+        parent = Span("parent")
+        parent.end = parent.start + 0.1
+        parent.duration_ms = 100.0
+
+        child = Span("child")
+        child.parent = parent
+        child.trace_id = parent.trace_id
+        child.end = child.start + 0.05
+        child.duration_ms = 50.0
+
+        exporter.export(parent)
+        exporter.export(child)
+
+        conn = sqlite3.connect(config.sqlite_path)
+        rows = conn.execute(
+            "SELECT span_name, span_id, parent_span_id FROM spans ORDER BY id"
+        ).fetchall()
+        conn.close()
+
+        parent_row, child_row = rows
+        assert parent_row[2] is None  # root span has no parent
+        assert child_row[2] == parent_row[1]  # child points to parent's span_id
+
+    def test_export_stores_service_name(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        config.service_name = "payments-api"
+        exporter = SQLiteExporter()
+        exporter.export(make_span())
+
+        conn = sqlite3.connect(config.sqlite_path)
+        name = conn.execute("SELECT service_name FROM spans").fetchone()[0]
+        conn.close()
+
+        assert name == "payments-api"
+
+    def test_export_stores_started_at_as_unix_epoch(self, tmp_path):
+        import sqlite3
+        import time
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        before = time.time()
+        exporter.export(make_span())
+        after = time.time()
+
+        conn = sqlite3.connect(config.sqlite_path)
+        started_at = conn.execute("SELECT started_at FROM spans").fetchone()[0]
+        conn.close()
+
+        assert before <= started_at <= after
+
+    def test_export_stores_url(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span(metadata={"url": "https://api.github.com/users/github"}))
+
+        conn = sqlite3.connect(config.sqlite_path)
+        row = conn.execute("SELECT url, extra_metadata FROM spans").fetchone()
+        conn.close()
+
+        assert row[0] == "https://api.github.com/users/github"
+        assert row[1] is None  # url must NOT also appear in extra_metadata
+
+    def test_wal_mode_enabled(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        SQLiteExporter()
+
+        conn = sqlite3.connect(config.sqlite_path)
+        mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        conn.close()
+
+        assert mode == "wal"
+
+    def test_schema_version_recorded(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SCHEMA_VERSION, SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        SQLiteExporter()
+
+        conn = sqlite3.connect(config.sqlite_path)
+        version = conn.execute(
+            "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
+        ).fetchone()[0]
+        conn.close()
+
+        assert version == SCHEMA_VERSION
+
 
 # ---------------------------------------------------------------------------
 # init_exporters / export_span

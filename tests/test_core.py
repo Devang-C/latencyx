@@ -10,6 +10,40 @@ from latencyx.core import Span, init, timed
 # ---------------------------------------------------------------------------
 
 
+def test_span_has_span_id_and_trace_id():
+    span = Span("test")
+    assert isinstance(span.span_id, str) and len(span.span_id) == 32
+    assert isinstance(span.trace_id, str) and len(span.trace_id) == 32
+
+
+def test_span_has_started_at_as_unix_epoch():
+    import time
+
+    before = time.time()
+    span = Span("test")
+    after = time.time()
+    assert before <= span.started_at <= after
+
+
+def test_child_span_inherits_trace_id():
+    """All spans within the same timed() nesting share a trace_id."""
+    with timed("parent") as parent_span:
+        with timed("child") as child_span:
+            pass
+    assert parent_span is not None and child_span is not None
+    assert parent_span.trace_id == child_span.trace_id
+    assert child_span.parent is parent_span
+
+
+def test_root_span_generates_unique_trace_id():
+    with timed("a") as span_a:
+        pass
+    with timed("b") as span_b:
+        pass
+    assert span_a is not None and span_b is not None
+    assert span_a.trace_id != span_b.trace_id
+
+
 def test_span_records_duration():
     span = Span("test")
     time.sleep(0.01)

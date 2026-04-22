@@ -10,6 +10,7 @@ def test_default_values():
     assert c.exporters == [ExporterType.SQLITE]
     assert c.json_file_path == "latencyx_traces.jsonl"
     assert c.sqlite_path == "latencyx_traces.db"
+    assert c.service_name == "default"
     assert c.instrument_fastapi is True
     assert c.instrument_http_client is True
     assert c.sample_rate == 1.0
