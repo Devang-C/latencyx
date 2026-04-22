@@ -98,7 +98,11 @@ def init(app: Any = None, **kwargs: Any) -> None:
 
         setattr(config, key, value)
 
-    config.enabled = True
+    # Fast-path: if disabled, skip all instrumentation entirely.
+    # No middleware is added, no monkey-patching happens, and timed() becomes
+    # a no-op — so there is truly zero overhead on the hot path.
+    if not config.enabled:
+        return
 
     from .exporters import init_exporters
 

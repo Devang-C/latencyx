@@ -149,3 +149,22 @@ def test_middleware_respects_disabled():
         client.get("/ping")
 
         assert not mock_export.called
+
+
+def test_init_enabled_false_skips_middleware():
+    """init(enabled=False) must not add middleware — zero overhead on every request."""
+    app = FastAPI()
+
+    @app.get("/ping")
+    async def ping():
+        return {}
+
+    with patch("latencyx.exporters.export_span") as mock_export:
+        latencyx.init(app=app, exporters=["console"], enabled=False)
+        client = TestClient(app)
+        client.get("/ping")
+
+        # Middleware was never added, so export_span is never reached
+        assert not mock_export.called
+        # Confirm the flag is actually False (not silently overridden to True)
+        assert config.enabled is False
