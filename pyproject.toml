@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=65.0", "wheel"]
+requires = ["setuptools>=65.0", "wheel", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "latencyx"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Zero-config latency tracking for FastAPI (and later more)"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -35,6 +35,8 @@ dev = [
 
 [tool.setuptools]
 packages = ["latencyx", "latencyx.exporters", "latencyx.instrumentors"]
+
+[tool.setuptools_scm]
 
 # --- Ruff ---
 [tool.ruff]
