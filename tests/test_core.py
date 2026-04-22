@@ -142,8 +142,14 @@ def test_init_converts_string_time_unit():
     assert config.time_unit == TimeUnit.SECONDS
 
 
-def test_init_sets_enabled_true():
-    config.enabled = False
+def test_init_respects_enabled_false():
+    # init() must not override enabled=False — that would defeat the fast-path
+    init(enabled=False)
+    assert config.enabled is False
+
+
+def test_init_enabled_by_default():
+    # Without an explicit enabled=False, init() leaves enabled as True (the default)
     init()
     assert config.enabled is True
 
