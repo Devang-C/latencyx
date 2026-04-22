@@ -38,6 +38,8 @@ Thumbs.db
 archived/
 latencyx_traces.jsonl
 *.jsonl
+latencyx_traces.db
+*.db
 
 # Testing
 .pytest_cache/
