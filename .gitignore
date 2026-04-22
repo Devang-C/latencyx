@@ -47,4 +47,6 @@ latencyx_traces.db
 htmlcov/
 .tox/
 
-uv.lockROADMAP.md
+uv.lock
+
+ROADMAP.md
