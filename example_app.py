@@ -11,10 +11,12 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
-# Initialize with custom config
+# SQLite is the default exporter — traces land in latencyx_traces.db.
+# Add "json_file" to exporters if you want a JSONL file alongside it
+# (useful for piping to other tools or log shippers).
 latencyx.init(
     app=app,
-    exporters=["console", "json_file"],
+    exporters=["sqlite", "console"],
     time_unit="ms",
     instrument_http_client=True,
     min_duration_ms=0.0,

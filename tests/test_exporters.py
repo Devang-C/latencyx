@@ -166,6 +166,144 @@ class TestJsonFileExporter:
 
 
 # ---------------------------------------------------------------------------
+# SQLiteExporter
+# ---------------------------------------------------------------------------
+
+
+class TestSQLiteExporter:
+    def test_export_writes_row(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span(name="db_op", duration_ms=25.0))
+
+        conn = sqlite3.connect(config.sqlite_path)
+        rows = conn.execute("SELECT span_name, duration_ms, status FROM spans").fetchall()
+        conn.close()
+
+        assert len(rows) == 1
+        assert rows[0] == ("db_op", 25.0, "success")
+
+    def test_export_error_span(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span(error="timeout"))
+
+        conn = sqlite3.connect(config.sqlite_path)
+        row = conn.execute("SELECT status, error FROM spans").fetchone()
+        conn.close()
+
+        assert row == ("error", "timeout")
+
+    def test_export_known_metadata_fields_get_columns(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span(metadata={"method": "GET", "path": "/users", "status_code": 200}))
+
+        conn = sqlite3.connect(config.sqlite_path)
+        row = conn.execute("SELECT method, path, status_code FROM spans").fetchone()
+        conn.close()
+
+        assert row == ("GET", "/users", 200)
+
+    def test_export_unknown_metadata_goes_to_extra_json(self, tmp_path):
+        import json
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span(metadata={"custom_tag": "payments", "version": "v2"}))
+
+        conn = sqlite3.connect(config.sqlite_path)
+        row = conn.execute("SELECT extra_metadata FROM spans").fetchone()
+        conn.close()
+
+        extra = json.loads(row[0])
+        assert extra["custom_tag"] == "payments"
+        assert extra["version"] == "v2"
+
+    def test_export_appends_multiple_rows(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span(name="op1"))
+        exporter.export(make_span(name="op2"))
+        exporter.export(make_span(name="op3"))
+
+        conn = sqlite3.connect(config.sqlite_path)
+        rows = conn.execute("SELECT span_name FROM spans ORDER BY id").fetchall()
+        conn.close()
+
+        assert [r[0] for r in rows] == ["op1", "op2", "op3"]
+
+    def test_export_timestamp_is_utc(self, tmp_path):
+        import sqlite3
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span())
+
+        conn = sqlite3.connect(config.sqlite_path)
+        ts = conn.execute("SELECT timestamp FROM spans").fetchone()[0]
+        conn.close()
+
+        assert "+00:00" in ts
+
+    def test_export_silently_handles_db_error(self, tmp_path):
+        import sqlite3 as sqlite3_module
+        from unittest.mock import MagicMock
+
+        from latencyx.exporters import sqlite as sqlite_module
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        exporter = sqlite_module.SQLiteExporter()
+        real_conn = exporter._conn
+
+        # sqlite3.Connection.execute is a C slot and can't be monkeypatched,
+        # so replace the whole connection with a mock that raises on execute.
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = sqlite3_module.Error("disk full")
+        exporter._conn = mock_conn
+
+        exporter.export(make_span())  # must not raise
+
+        # Restore real connection so the conftest fixture can close it cleanly
+        exporter._conn = real_conn
+
+    def test_creates_parent_directories(self, tmp_path):
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "nested" / "dir" / "traces.db")
+        exporter = SQLiteExporter()
+        exporter.export(make_span())
+
+        import sqlite3
+
+        conn = sqlite3.connect(config.sqlite_path)
+        count = conn.execute("SELECT COUNT(*) FROM spans").fetchone()[0]
+        conn.close()
+        assert count == 1
+
+
+# ---------------------------------------------------------------------------
 # init_exporters / export_span
 # ---------------------------------------------------------------------------
 
@@ -190,13 +328,24 @@ class TestExporterRegistry:
         assert len(exp_module._exporters) == 1
         assert isinstance(exp_module._exporters[0], JsonFileExporter)
 
-    def test_init_exporters_both(self, tmp_path):
+    def test_init_exporters_sqlite(self, tmp_path):
+        import latencyx.exporters as exp_module
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.exporters = [ExporterType.SQLITE]
+        config.sqlite_path = str(tmp_path / "t.db")
+        exp_module.init_exporters()
+        assert len(exp_module._exporters) == 1
+        assert isinstance(exp_module._exporters[0], SQLiteExporter)
+
+    def test_init_exporters_all_three(self, tmp_path):
         import latencyx.exporters as exp_module
 
-        config.exporters = [ExporterType.CONSOLE, ExporterType.JSON_FILE]
+        config.exporters = [ExporterType.CONSOLE, ExporterType.JSON_FILE, ExporterType.SQLITE]
         config.json_file_path = str(tmp_path / "t.jsonl")
+        config.sqlite_path = str(tmp_path / "t.db")
         exp_module.init_exporters()
-        assert len(exp_module._exporters) == 2
+        assert len(exp_module._exporters) == 3
 
     def test_export_span_calls_all_exporters(self, tmp_path, caplog):
         from latencyx.exporters import export_span, init_exporters

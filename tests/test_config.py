@@ -7,8 +7,9 @@ def test_default_values():
     c = LatencyXConfig()
     assert c.enabled is True
     assert c.time_unit == TimeUnit.MILLISECONDS
-    assert c.exporters == [ExporterType.CONSOLE]
+    assert c.exporters == [ExporterType.SQLITE]
     assert c.json_file_path == "latencyx_traces.jsonl"
+    assert c.sqlite_path == "latencyx_traces.db"
     assert c.instrument_fastapi is True
     assert c.instrument_http_client is True
     assert c.sample_rate == 1.0

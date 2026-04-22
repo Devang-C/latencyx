@@ -16,6 +16,10 @@ def reset_latencyx_state():
     for k, v in saved.items():
         setattr(config, k, v)
 
+    # Close any SQLiteExporter connections before clearing to avoid ResourceWarnings
+    for exp in exporters_module._exporters:
+        if hasattr(exp, "close"):
+            exp.close()
     exporters_module._exporters.clear()
 
     # Undo httpx monkey-patch if it was applied during the test
