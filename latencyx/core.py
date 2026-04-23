@@ -87,6 +87,21 @@ def timed(
         _local.current_span = parent
 
 
+def _auto_instrument(app: Any) -> None:
+    """Detect whether app is FastAPI or Flask and wire the appropriate instrumentor."""
+    module = type(app).__module__ or ""
+    if "fastapi" in module:
+        if config.instrument_fastapi:
+            from .instrumentors.fastapi import instrument_fastapi
+
+            instrument_fastapi(app)
+    elif "flask" in module:
+        if config.instrument_flask:
+            from .instrumentors.flask import instrument_flask
+
+            instrument_flask(app)
+
+
 def init(app: Any = None, **kwargs: Any) -> None:
     for key, value in kwargs.items():
         if not hasattr(config, key):
@@ -115,10 +130,8 @@ def init(app: Any = None, **kwargs: Any) -> None:
 
     init_exporters()
 
-    if app is not None and config.instrument_fastapi:
-        from .instrumentors.fastapi import instrument_fastapi
-
-        instrument_fastapi(app)
+    if app is not None:
+        _auto_instrument(app)
 
     if config.instrument_http_client:
         try:

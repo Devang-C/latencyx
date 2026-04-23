@@ -23,6 +23,7 @@ class LatencyXConfig:
     sqlite_path: str = "latencyx_traces.db"
     service_name: str = "default"
     instrument_fastapi: bool = True
+    instrument_flask: bool = True
     instrument_http_client: bool = True
     sample_rate: float = 1.0
     min_duration_ms: float = 0.0
