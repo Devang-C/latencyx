@@ -1,20 +1,18 @@
 import random
-import threading
 import time
 import traceback
 import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, Optional
 
 from .config import ExporterType, TimeUnit, config
 
-
-class _LocalState(threading.local):
-    current_span: Optional["Span"] = None
-
-
-_local = _LocalState()
+# Tracks the active span for the current coroutine (async) or thread (sync).
+# ContextVar is isolated per-coroutine in asyncio and per-thread in sync code,
+# making it correct for both — unlike threading.local which breaks under async.
+_current_span_var: ContextVar[Optional["Span"]] = ContextVar("current_span", default=None)
 
 
 class Span:
@@ -69,12 +67,12 @@ def timed(
 
     span = Span(name, span_type, metadata)
 
-    parent: Optional[Span] = _local.current_span
+    parent: Optional[Span] = _current_span_var.get()
     span.parent = parent
     # All spans in the same request share a trace_id — inherit from parent or start a new trace
     if parent:
         span.trace_id = parent.trace_id
-    _local.current_span = span
+    token = _current_span_var.set(span)
 
     try:
         yield span
@@ -84,7 +82,7 @@ def timed(
     finally:
         if span.end is None:
             span.finish()
-        _local.current_span = parent
+        _current_span_var.reset(token)
 
 
 def _auto_instrument(app: Any) -> None:
