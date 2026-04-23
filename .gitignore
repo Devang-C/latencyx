@@ -38,6 +38,10 @@ Thumbs.db
 archived/
 latencyx_traces.jsonl
 *.jsonl
+latencyx_traces.db
+*.db
+*.db-wal
+*.db-shm
 
 # Testing
 .pytest_cache/
@@ -46,3 +50,5 @@ htmlcov/
 .tox/
 
 uv.lock
+
+ROADMAP.md

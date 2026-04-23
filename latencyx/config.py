@@ -10,14 +10,18 @@ class TimeUnit(str, Enum):
 class ExporterType(str, Enum):
     CONSOLE = "console"
     JSON_FILE = "json_file"
+    SQLITE = "sqlite"
 
 
 @dataclass
 class LatencyXConfig:
     enabled: bool = True
     time_unit: TimeUnit = TimeUnit.MILLISECONDS
-    exporters: list[ExporterType] = field(default_factory=lambda: [ExporterType.CONSOLE])
+    exporters: list[ExporterType] = field(default_factory=lambda: [ExporterType.SQLITE])
     json_file_path: str = "latencyx_traces.jsonl"
+    # SQLite is the default local storage — queryable by the CLI commands
+    sqlite_path: str = "latencyx_traces.db"
+    service_name: str = "default"
     instrument_fastapi: bool = True
     instrument_http_client: bool = True
     sample_rate: float = 1.0

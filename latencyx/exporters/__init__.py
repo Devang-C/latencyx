@@ -21,6 +21,10 @@ def init_exporters() -> None:
             from .json_file import JsonFileExporter
 
             _exporters.append(JsonFileExporter())
+        elif exporter_type == ExporterType.SQLITE:
+            from .sqlite import SQLiteExporter
+
+            _exporters.append(SQLiteExporter())
 
 
 def export_span(span: Any) -> None:
