@@ -22,7 +22,8 @@ latencyx = "latencyx.cli:main"
 [project.optional-dependencies]
 http = ["httpx>=0.24.0"]
 flask = ["flask>=2.0"]
-all = ["httpx>=0.24.0", "flask>=2.0"]
+sqlalchemy = ["sqlalchemy>=1.4"]
+all = ["httpx>=0.24.0", "flask>=2.0", "sqlalchemy>=1.4"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
@@ -30,6 +31,7 @@ dev = [
     "fastapi>=0.100.0",
     "httpx>=0.24.0",
     "flask>=2.0",
+    "sqlalchemy>=1.4",
     "ruff>=0.4.0",
     "mypy>=1.8",
     "pre-commit>=3.0",

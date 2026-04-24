@@ -154,9 +154,9 @@ def test_timed_nested_spans_restore_parent():
             assert child_span is not None
             assert child_span.parent == parent_span
         # After exiting child, current_span should be back to parent
-        from latencyx.core import _local
+        from latencyx.core import _current_span_var
 
-        assert _local.current_span == parent_span
+        assert _current_span_var.get() == parent_span
 
 
 # ---------------------------------------------------------------------------

@@ -25,6 +25,8 @@ class LatencyXConfig:
     instrument_fastapi: bool = True
     instrument_flask: bool = True
     instrument_http_client: bool = True
+    instrument_sqlalchemy: bool = True
+    sqlalchemy_capture_params: bool = False
     sample_rate: float = 1.0
     min_duration_ms: float = 0.0
     include_traceback: bool = False
