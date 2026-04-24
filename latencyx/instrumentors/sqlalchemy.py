@@ -1,11 +1,16 @@
 import re
-import time
+import weakref
 from typing import Any, Optional
 
 import sqlalchemy.event as sa_event
 
 from ..config import config
 from ..core import Span, _current_span_var
+
+# WeakSet tracks instrumented engines without preventing garbage collection.
+# When an engine is GC'd its entry is automatically removed, so a new engine
+# allocated at the same address is never silently skipped.
+_instrumented_engines: weakref.WeakSet[Any] = weakref.WeakSet()
 
 # DML: INSERT INTO <table>, UPDATE <table>, DELETE FROM <table>
 _DML_RE = re.compile(r"^\s*(INSERT\s+INTO|UPDATE|DELETE\s+FROM|DELETE)\s+(\w+)", re.IGNORECASE)
@@ -53,17 +58,40 @@ def _sanitize_db_url(engine: Any) -> str:
 
 
 def instrument_sqlalchemy(engine: Any) -> None:
-    """Attach LatencyX tracing to a SQLAlchemy Engine.
+    """Attach LatencyX tracing to a SQLAlchemy Engine or AsyncEngine.
 
     Every query executed through this engine becomes a db.query child span
     linked to the active request span via trace_id / parent_span_id.
+
+    For AsyncEngine, context is propagated via ContextVar — asyncio copies the
+    current context when dispatching to thread executors (used by aiosqlite),
+    so _current_span_var.get() returns the correct parent span in the event handler.
     """
+    # Unwrap AsyncEngine to its underlying sync engine. The cursor events
+    # (before_cursor_execute, after_cursor_execute, handle_error) are fired on
+    # the sync engine regardless of whether queries originate from async code.
+    try:
+        from sqlalchemy.ext.asyncio import AsyncEngine
+
+        if isinstance(engine, AsyncEngine):
+            engine = engine.sync_engine
+    except ImportError:
+        pass
+
+    if engine in _instrumented_engines:
+        return
+    _instrumented_engines.add(engine)
+
     dialect = engine.dialect.name
     db_url = _sanitize_db_url(engine)
 
     # Per-connection storage keyed by the connection object's id.
-    # Stores (Span, perf_counter start) for the in-flight query.
-    _inflight: dict[int, tuple[Span, float]] = {}
+    # Span.start is set in Span.__init__ at the moment _before fires (just before
+    # the query executes), so no separate start timestamp is needed here.
+    # DB spans intentionally stay off _current_span_var — nested queries appear as
+    # siblings of the outer db.query rather than children, which is acceptable for
+    # N+1 detection and avoids re-entrancy complexity.
+    _inflight: dict[int, Span] = {}
 
     @sa_event.listens_for(engine, "before_cursor_execute")
     def _before(
@@ -85,17 +113,15 @@ def instrument_sqlalchemy(engine: Any) -> None:
         if config.sqlalchemy_capture_params:
             span.metadata["params"] = str(parameters)
 
-        _inflight[id(conn)] = (span, time.perf_counter())
+        _inflight[id(conn)] = span
 
     @sa_event.listens_for(engine, "after_cursor_execute")
     def _after(
         conn: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: bool
     ) -> None:  # noqa: E501
-        entry = _inflight.pop(id(conn), None)
-        if entry is None:
+        span = _inflight.pop(id(conn), None)
+        if span is None:
             return
-        span, t0 = entry
-        span.start = t0  # align with how Span.finish() computes duration
         span.finish()
 
     @sa_event.listens_for(engine, "handle_error")
@@ -103,9 +129,7 @@ def instrument_sqlalchemy(engine: Any) -> None:
         conn = exception_context.connection
         if conn is None:
             return
-        entry = _inflight.pop(id(conn), None)
-        if entry is None:
+        span = _inflight.pop(id(conn), None)
+        if span is None:
             return
-        span, t0 = entry
-        span.start = t0
         span.finish(error=exception_context.original_exception)
