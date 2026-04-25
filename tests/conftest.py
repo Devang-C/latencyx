@@ -33,3 +33,11 @@ def reset_latencyx_state():
             hc._original_httpx_request = None
     except (ImportError, AttributeError):
         pass
+
+    # Clear SQLAlchemy engine tracking so each test gets fresh instrumentation
+    try:
+        import latencyx.instrumentors.sqlalchemy as sa_instr
+
+        sa_instr._instrumented_engines.clear()
+    except (ImportError, AttributeError):
+        pass
