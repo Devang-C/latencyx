@@ -1,18 +1,24 @@
 # LatencyX
 
-**Lightweight auto-instrumentation for Python web apps. Because OpenTelemetry made you question your life choices.**
+**Add one line. Know why your API is slow.**
 
-Built for solo developers and small teams who want observability without needing a PhD in distributed systems.
+LatencyX auto-instruments your Python web app and stores traces locally — no Jaeger, no Kafka, no Docker Compose file with 11 services. Just run your app and start asking questions.
 
-## Why LatencyX?
+> **Status:** Built for local development and staging. Not production-ready yet — see [Production](#production) below.
 
-- **One-line setup** - `latencyx.init(app)` and you're done
-- **Auto-instrumentation** - FastAPI, HTTP clients (httpx). More coming.
-- **Multiple exporters** - Console, JSON files
-- **Minimal dependencies** - Won't break your deployment
-- **Actually simple** - No 50-page configuration docs
+---
 
-## Quick Start
+## What you get
+
+- **FastAPI and Flask** middleware — every request traced automatically
+- **SQLAlchemy tracing** — sync and async, query names, durations, parent linking
+- **httpx tracing** — outbound HTTP calls captured as child spans
+- **Local SQLite storage** — no external infra, traces survive restarts
+- **CLI analysis tools** — p50/p95/p99, slowest endpoints, error grouping, full trace trees
+
+---
+
+## Quick start
 
 ```bash
 pip install latencyx
@@ -23,111 +29,146 @@ from fastapi import FastAPI
 import latencyx
 
 app = FastAPI()
-latencyx.init(app)  # That's it.
-
-@app.get("/")
-async def root():
-    return {"hello": "world"}
+latencyx.init(app)  # done
 ```
 
-**Output:**
-```
-INFO:latencyx:[http.server] GET / duration=50.58ms status=200 method=GET client=127.0.0.1 path=/
-```
-
-### CLI Monitoring
-
-Watch your traces in real-time with a pretty CLI:
-
-```bash
-latencyx tail
-```
-
-```
-📊 Watching LatencyX traces from: latencyx_traces.jsonl
-   Press Ctrl+C to stop
-──────────────────────────────────────────────────────────────────────────────────────
-TYPE             │ NAME                            │    DURATION │   STATUS │ DETAILS
-──────────────────────────────────────────────────────────────────────────────────────
-http.server      │ GET /                           │     50.58ms │      200 │ client=127.0.0.1
-http.client      │ GET api.github.com/users/github │     656.2ms │      200 │ host=api.github.com
-http.server      │ GET /external                   │     662.0ms │      200 │ client=127.0.0.1
-business_logic   │ custom_operation                │     100.2ms │  success │
-http.server      │ GET /custom                     │     101.1ms │      200 │ client=127.0.0.1
-```
-
-It's basically `tail -f` but doesn't hurt your eyes.
-
-## What Gets Traced?
-
-- **FastAPI endpoints** (automatic)
-- **HTTP client calls** via httpx (automatic)
-- **Custom operations** via context managers
-
-For advanced usage, configuration options, and examples, see USAGE.md in the repository.
-
-## Comparison with OpenTelemetry
-
-| Feature | LatencyX | OpenTelemetry |
-|---------|----------|---------------|
-| Setup | 1 line | 50+ lines |
-| Dependencies | Minimal | Heavy |
-| Learning curve | Minutes | Hours/Days |
-| Best for | Solo devs, small teams | Large enterprises |
-
-LatencyX isn't trying to replace OpenTelemetry. If you need distributed tracing across 50 microservices, use OTel. If you just want to know why your API is slow, use LatencyX.
-
-## Roadmap
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| FastAPI instrumentation | ✓ Done | Works today |
-| HTTP client tracing (httpx) | ✓ Done | Works today |
-| Console & JSON exporters | ✓ Done | Works today |
-| Flask instrumentation | Planned | Because not everyone uses FastAPI |
-| SQLAlchemy support | Planned | Async + sync |
-| PostgreSQL (psycopg2, asyncpg) | Planned | Native drivers |
-| Redis tracing | Planned | Cache tracing that doesn't lie |
-| MySQL support | Planned | For the other half |
-| Async jobs (Celery, RQ) | Planned | Background tasks need love too |
-
-**Vote for these by opening an issue:**
-
-| Feature | Why it's in maybe-land |
-|---------|------------------------|
-| Distributed tracing with trace IDs | Complex, needs real use cases |
-| WebSocket tracing | Depends on demand |
-| Sentry/Datadog integration | Only if people actually need it |
-| Slow query detection | Might build if requested |
-| APM tool integrations | Tell me which ones matter |
-
-If something here would make your life easier, let me know. Otherwise, it stays in maybe-land.
-
-## Contributing
-
-This is a solo project right now, but contributions are welcome:
-
-- **Feature requests** - Open an issue and tell me what you need
-- **Bug reports** - If something breaks, let me know
-- **Code contributions** - PRs welcome, but let's keep it simple
-
-No formal process yet. Just open an issue or PR.
-
-## Installation
-
-```bash
-# Basic installation
-pip install latencyx
-
-# With optional dependencies
-pip install latencyx[http]      # HTTP client tracing
-pip install latencyx[all]       # Everything
-```
-
-## License
-
-MIT License - use it however you want.
+That's it. Every request is now traced and stored in `latencyx_traces.db`.
 
 ---
 
-**Made for developers who want observability without the headache.**
+## CLI
+
+The CLI is where LatencyX earns its keep. All commands read from the local SQLite database.
+
+### `latencyx stats`
+Overall p50/p95/p99 latency, error rate, and top slow endpoints.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        LatencyX Stats                           │
+├────────────────────────┬───────┬───────┬────────┬──────────────┤
+│ Endpoint               │  p50  │  p95  │   p99  │  Error Rate  │
+├────────────────────────┼───────┼───────┼────────┼──────────────┤
+│ GET /api/users         │ 42ms  │ 310ms │ 890ms  │    1.2%      │
+│ POST /api/orders       │ 120ms │ 540ms │ 1200ms │    3.8%      │
+│ GET /api/products      │ 18ms  │  65ms │  140ms │    0.0%      │
+└────────────────────────┴───────┴───────┴────────┴──────────────┘
+```
+
+### `latencyx slowest`
+The slowest recent requests, filterable by path and time range.
+
+```
+latencyx slowest --limit 10 --path /api/orders
+```
+
+### `latencyx errors`
+Recent errors grouped by endpoint and message with counts.
+
+### `latencyx endpoints`
+All distinct paths with request count, p50/p95, and error rate.
+
+### `latencyx trace <trace_id>`
+Full trace tree — HTTP span with child DB query spans and durations.
+
+```
+GET /api/orders  412ms  [200]
+├── db.query  SELECT orders  180ms
+├── db.query  SELECT products  95ms
+└── http.client  GET payments.internal/validate  130ms
+```
+
+### `latencyx report`
+Request volume, error rate, top slow endpoints, top errors — all in one view.
+
+### `latencyx tail`
+Live stream of incoming traces as they happen.
+
+---
+
+## Flask
+
+```python
+from flask import Flask
+import latencyx
+
+app = Flask(__name__)
+latencyx.init(app)
+```
+
+---
+
+## SQLAlchemy
+
+```python
+from sqlalchemy import create_engine
+import latencyx
+
+engine = create_engine("sqlite:///myapp.db")
+latencyx.init(app, sqlalchemy_engine=engine)
+```
+
+Async engines (`create_async_engine`) work the same way.
+
+---
+
+## Optional dependencies
+
+```bash
+pip install latencyx               # FastAPI + Flask + CLI
+pip install latencyx[http]         # + httpx tracing
+pip install latencyx[sqlalchemy]   # + SQLAlchemy tracing
+pip install latencyx[all]          # everything
+```
+
+---
+
+## Disable with zero overhead
+
+```python
+latencyx.init(app, enabled=False)
+```
+
+When disabled, all instrumentation is skipped at the entry point — no branches, no storage, no cost.
+
+---
+
+## Production
+
+LatencyX is **not production-ready yet.** It's designed for local development and staging environments.
+
+Specific gaps for production use:
+
+- **Multi-process deployments** (gunicorn with multiple workers) — SQLite does not handle concurrent writes from multiple OS processes reliably under load. You'll get contention or dropped spans.
+- **No retention / cleanup** — the trace database grows indefinitely. There's no auto-delete yet.
+- **No performance benchmarks** — the per-request overhead hasn't been measured under load.
+- **No migration story** — a schema change on upgrade could break an existing database.
+
+For single-process, low-traffic deployments (one uvicorn worker, internal tools, staging) it works fine in practice. For anything beyond that, wait for v1.0.0.
+
+---
+
+## Compared to OpenTelemetry
+
+| | LatencyX | OpenTelemetry |
+|---|---|---|
+| Setup | 1 line | 50+ lines of config |
+| Infrastructure | None (local SQLite) | Collector + backend required |
+| Learning curve | Minutes | Hours to days |
+| Best for | Dev, staging, small teams | Large-scale, multi-service |
+
+LatencyX isn't trying to replace OpenTelemetry. If you need distributed tracing across 20 microservices, use OTel. If you want to know why your endpoint is slow without standing up infrastructure, use LatencyX.
+
+---
+
+## Roadmap
+
+v0.3.0 is the current release.
+
+v1.0.0 targets: Django support, Redis tracing, SQLite retention/cleanup, performance benchmarks, and a production guide.
+
+---
+
+## License
+
+MIT
