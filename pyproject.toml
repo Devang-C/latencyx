@@ -14,6 +14,8 @@ keywords = ["monitoring", "observability", "fastapi", "tracing", "latency"]
 
 dependencies = [
     "starlette>=0.27.0",
+    "rich>=13.0",
+    "typer>=0.12",
 ]
 
 [project.scripts]
@@ -23,7 +25,7 @@ latencyx = "latencyx.cli:main"
 http = ["httpx>=0.24.0"]
 flask = ["flask>=2.0"]
 sqlalchemy = ["sqlalchemy>=1.4", "aiosqlite>=0.19"]
-all = ["httpx>=0.24.0", "flask>=2.0", "sqlalchemy>=1.4", "aiosqlite>=0.19"]
+all = ["httpx>=0.24.0", "flask>=2.0", "sqlalchemy>=1.4", "aiosqlite>=0.19", "rich>=13.0", "typer>=0.12"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
@@ -39,7 +41,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["latencyx", "latencyx.exporters", "latencyx.instrumentors"]
+packages = ["latencyx", "latencyx.exporters", "latencyx.instrumentors", "latencyx.cli", "latencyx.cli.commands"]
 
 [tool.setuptools_scm]
 
@@ -73,7 +75,7 @@ addopts = [
 
 [tool.coverage.run]
 omit = [
-    "latencyx/cli.py",
+    "latencyx/cli/*",
     "latencyx/__main__.py",
 ]
 
