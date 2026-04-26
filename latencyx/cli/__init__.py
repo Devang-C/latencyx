@@ -1,6 +1,6 @@
 import typer
 
-from .commands import endpoints, errors, report, slowest, stats, tail, trace
+from .commands import endpoints, errors, report, serve, slowest, stats, tail, trace
 
 app = typer.Typer(
     name="latencyx",
@@ -17,6 +17,7 @@ app.command("slowest")(slowest.run)
 app.command("errors")(errors.run)
 app.command("trace")(trace.run)
 app.command("report")(report.run)
+app.command("serve")(serve.run)
 
 
 def main() -> None:

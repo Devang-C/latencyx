@@ -1,4 +1,5 @@
 import sqlite3
+import time
 from collections import defaultdict
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -175,6 +176,105 @@ class LatencyXDB:
             (trace_id,),
         )
         return cur.fetchall()
+
+    def get_traces(
+        self,
+        since: float,
+        path: Optional[str] = None,
+        status_code: Optional[int] = None,
+        status_range: Optional[tuple[int, int]] = None,
+        min_duration: Optional[float] = None,
+        limit: int = 50,
+    ) -> list:
+        conditions = ["span_type = 'http.server'", "started_at >= ?"]
+        params: list[Any] = [since]
+
+        if path:
+            conditions.append("(path LIKE ? OR span_name LIKE ?)")
+            params.extend([f"%{path}%", f"%{path}%"])
+        if status_code is not None:
+            conditions.append("status_code = ?")
+            params.append(status_code)
+        elif status_range is not None:
+            conditions.append("status_code BETWEEN ? AND ?")
+            params.extend(list(status_range))
+        if min_duration is not None:
+            conditions.append("duration_ms >= ?")
+            params.append(min_duration)
+
+        params.append(limit)
+        where = " AND ".join(conditions)
+
+        cur = self._conn.execute(
+            f"""
+            SELECT trace_id, started_at, span_name, path, method,
+                   status_code, duration_ms, error
+            FROM spans
+            WHERE {where}
+            ORDER BY started_at DESC
+            LIMIT ?
+            """,  # noqa: S608
+            params,
+        )
+        return cur.fetchall()
+
+    def get_sparklines(self, since: float, top_n: int = 5) -> dict:
+        cur = self._conn.execute(
+            """
+            SELECT span_name, COUNT(*) AS cnt
+            FROM spans
+            WHERE span_type = 'http.server' AND started_at >= ?
+            GROUP BY span_name
+            ORDER BY cnt DESC
+            LIMIT ?
+            """,
+            (since, top_n),
+        )
+        top_endpoints = [row["span_name"] for row in cur.fetchall()]
+
+        if not top_endpoints:
+            return {}
+
+        placeholders = ",".join("?" * len(top_endpoints))
+        cur = self._conn.execute(
+            f"""
+            SELECT span_name, started_at, duration_ms
+            FROM spans
+            WHERE span_type = 'http.server'
+              AND started_at >= ?
+              AND span_name IN ({placeholders})
+            ORDER BY started_at
+            """,  # noqa: S608
+            [since, *top_endpoints],
+        )
+        rows = cur.fetchall()
+
+        now = time.time()
+        bucket_size = 3600.0
+        num_buckets = 6
+
+        result: dict[str, Any] = {}
+        for endpoint in top_endpoints:
+            buckets: list[list[float]] = [[] for _ in range(num_buckets)]
+            for row in rows:
+                if row["span_name"] != endpoint:
+                    continue
+                age = now - row["started_at"]
+                idx = int(age / bucket_size)
+                if 0 <= idx < num_buckets:
+                    buckets[num_buckets - 1 - idx].append(row["duration_ms"])
+
+            result[endpoint] = {
+                "counts": [len(b) for b in buckets],
+                "p95": [percentile(sorted(b), 95) for b in buckets],
+            }
+
+        return result
+
+    def get_span_count(self) -> int:
+        cur = self._conn.execute("SELECT COUNT(*) FROM spans")
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
 
 
 @contextmanager
