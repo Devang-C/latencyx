@@ -271,6 +271,35 @@ class LatencyXDB:
 
         return result
 
+    def get_volume(self, since: float, num_buckets: int = 20) -> dict:
+        now = time.time()
+        bucket_size = max((now - since) / num_buckets, 1.0)
+        timestamps = [since + i * bucket_size for i in range(num_buckets)]
+        counts: list[int] = [0] * num_buckets
+        lat_buckets: list[list[float]] = [[] for _ in range(num_buckets)]
+
+        cur = self._conn.execute(
+            """
+            SELECT started_at, duration_ms
+            FROM spans
+            WHERE span_type = 'http.server' AND started_at >= ?
+            ORDER BY started_at
+            """,
+            (since,),
+        )
+        for row in cur.fetchall():
+            idx = int((row["started_at"] - since) / bucket_size)
+            idx = max(0, min(num_buckets - 1, idx))
+            counts[idx] += 1
+            if row["duration_ms"] is not None:
+                lat_buckets[idx].append(row["duration_ms"])
+
+        return {
+            "timestamps": timestamps,
+            "counts": counts,
+            "p95": [percentile(sorted(b), 95) for b in lat_buckets],
+        }
+
     def get_span_count(self) -> int:
         cur = self._conn.execute("SELECT COUNT(*) FROM spans")
         row = cur.fetchone()

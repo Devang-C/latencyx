@@ -180,4 +180,12 @@ def create_app(db_path: str) -> FastAPI:
         with _open(db_path) as db:
             return db.get_sparklines(since_ts)
 
+    # ── /api/volume ───────────────────────────────────────────────────────────
+
+    @app.get("/api/volume")
+    def api_volume(since: str = "6h") -> dict[str, Any]:
+        since_ts = _parse_since_http(since)
+        with _open(db_path) as db:
+            return db.get_volume(since_ts)
+
     return app
