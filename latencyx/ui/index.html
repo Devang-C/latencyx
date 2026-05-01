@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LatencyX</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js" defer></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --sidebar:   #0b0f14;
+  --border:    #21262d;
+  --border-r:  #1c2128;
+  --text:      #e6edf3;
+  --muted:     #8b949e;
+  --dim:       #6e7681;
+  --green:     #3fb950;
+  --yellow:    #e3b341;
+  --red:       #f85149;
+  --blue:      #79c0ff;
+  --purple:    #c084fc;
+  --indigo:    #818cf8;
+}
+
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 13px; }
+
+/* ── Layout ── */
+.layout { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 200px; min-width: 200px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+.topbar {
+  height: 44px; min-height: 44px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 20px; gap: 12px;
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.content { flex: 1; overflow-y: auto; padding: 24px; min-height: 0; }
+
+/* ── Sidebar ── */
+.logo {
+  padding: 18px 16px 14px;
+  font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
+  border-bottom: 1px solid var(--border);
+}
+.logo span { color: var(--green); }
+
+.nav-section { padding: 16px 0 4px; }
+.nav-label {
+  padding: 0 16px 6px;
+  font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--dim);
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 16px; cursor: pointer;
+  color: var(--muted); font-size: 12.5px;
+  border-left: 2px solid transparent;
+  transition: color 0.1s, background 0.1s;
+  user-select: none;
+}
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.nav-item.active {
+  color: var(--text); background: rgba(255,255,255,0.06);
+  border-left-color: var(--green);
+}
+.nav-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dim); flex-shrink: 0;
+}
+.nav-dot.green  { background: var(--green); }
+.nav-dot.red    { background: var(--red); }
+.nav-dot.yellow { background: var(--yellow); }
+.nav-dot.blue   { background: var(--blue); }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 10px; color: var(--dim); line-height: 1.7;
+}
+.sidebar-footer .service-name { color: var(--muted); font-weight: 500; }
+
+/* ── Top bar ── */
+.topbar-title { font-size: 13px; font-weight: 500; flex: 1; }
+.time-pills { display: flex; gap: 4px; }
+.pill {
+  padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03); color: var(--muted); font-size: 11px; cursor: pointer;
+  transition: all 0.1s; user-select: none;
+}
+.pill.active { border-color: var(--green); color: var(--green); background: rgba(63,185,80,0.08); }
+.pill:hover:not(.active) { border-color: var(--dim); color: var(--text); }
+
+.divider-v { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+
+.live-dot {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--green);
+}
+.pulse {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.card-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 6px;
+}
+.card-value { font-size: 22px; font-weight: 500; line-height: 1; }
+.card-sub { font-size: 11px; color: var(--dim); margin-top: 5px; }
+
+/* ── Grid helpers ── */
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+/* ── Section label ── */
+.section-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 10px; margin-top: 20px;
+}
+.section-label:first-child { margin-top: 0; }
+
+/* ── Table ── */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--dim); padding: 0 12px 8px; text-align: left;
+}
+.data-table th.r, .data-table td.r { text-align: right; }
+.data-table td {
+  padding: 9px 12px;
+  border-top: 1px solid var(--border-r);
+  font-size: 12px; color: var(--text);
+  vertical-align: middle;
+}
+.data-table tr:hover td { background: rgba(255,255,255,0.03); cursor: pointer; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 3px;
+  margin-right: 6px; letter-spacing: 0.01em;
+}
+.badge-GET    { background: rgba(63,185,80,0.12);  color: var(--green); }
+.badge-POST   { background: rgba(129,140,248,0.12); color: var(--indigo); }
+.badge-PUT    { background: rgba(227,179,65,0.12);  color: var(--yellow); }
+.badge-DELETE { background: rgba(248,81,73,0.12);   color: var(--red); }
+.badge-PATCH  { background: rgba(192,132,252,0.12); color: var(--purple); }
+.badge-2xx { background: rgba(63,185,80,0.12);  color: var(--green); }
+.badge-4xx { background: rgba(227,179,65,0.12);  color: var(--yellow); }
+.badge-5xx { background: rgba(248,81,73,0.12);   color: var(--red); }
+
+/* ── Latency bar ── */
+.lat-track { width: 60px; height: 4px; background: var(--border); border-radius: 2px; display: inline-block; vertical-align: middle; position: relative; }
+.lat-fill  { height: 100%; border-radius: 2px; position: absolute; left: 0; top: 0; }
+
+/* ── Colors ── */
+.c-green  { color: var(--green); }
+.c-yellow { color: var(--yellow); }
+.c-red    { color: var(--red); }
+.c-blue   { color: var(--blue); }
+.c-purple { color: var(--purple); }
+.c-muted  { color: var(--muted); }
+.c-dim    { color: var(--dim); }
+.mono     { font-family: 'Courier New', monospace; }
+
+/* ── Sparkline card ── */
+.sparkline-card { display: flex; flex-direction: column; gap: 8px; }
+.sparkline-header { display: flex; justify-content: space-between; align-items: center; }
+.sparkline-path { font-family: 'Courier New', monospace; font-size: 11px; color: var(--blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
+.sparkline-p95  { font-size: 12px; font-weight: 500; }
+.spark-container { height: 42px; overflow: hidden; }
+.spark-container .uplot { width: 100% !important; }
+
+/* ── Flash animation ── */
+.flash { animation: flash-in 0.3s ease; }
+@keyframes flash-in { 0%{opacity:0.4} 100%{opacity:1} }
+
+/* ── Traces split ── */
+.traces-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.trace-list-panel {
+  width: 380px; min-width: 380px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.trace-detail-panel { flex: 1; overflow-y: auto; padding: 16px; min-width: 0; }
+
+.trace-filters {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+  flex-shrink: 0;
+}
+.filter-row { display: flex; gap: 6px; }
+.filter-input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 5px; padding: 5px 9px; font-size: 11px; color: var(--text);
+  font-family: inherit; outline: none;
+}
+.filter-input:focus { border-color: var(--green); }
+.filter-select {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 5px; padding: 5px 7px; font-size: 11px; color: var(--text);
+  font-family: inherit; outline: none; cursor: pointer;
+}
+.filter-select:focus { border-color: var(--green); }
+
+.trace-list { flex: 1; overflow-y: auto; }
+.trace-row {
+  padding: 10px 14px; border-bottom: 1px solid var(--border-r);
+  cursor: pointer; transition: background 0.1s;
+}
+.trace-row:hover { background: rgba(255,255,255,0.03); }
+.trace-row.selected { background: rgba(121,192,255,0.06); border-left: 2px solid var(--green); }
+.trace-row-top { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.trace-ts { font-size: 10px; color: var(--dim); }
+.trace-path { font-family: 'Courier New', monospace; font-size: 11px; color: var(--blue); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trace-dur { font-size: 11px; font-weight: 500; }
+
+/* ── Waterfall ── */
+.waterfall { font-size: 11px; }
+.wf-header { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wf-title { font-size: 13px; font-weight: 500; font-family: 'Courier New', monospace; color: var(--blue); }
+.wf-total { color: var(--muted); font-size: 11px; }
+
+.wf-ruler {
+  position: relative; height: 18px; margin-bottom: 4px; margin-left: 200px;
+  border-bottom: 1px solid var(--border);
+}
+.wf-ruler-mark {
+  position: absolute; transform: translateX(-50%);
+  font-size: 9px; color: var(--dim); white-space: nowrap;
+}
+
+.wf-row { display: flex; align-items: center; min-height: 26px; }
+.wf-label {
+  width: 200px; min-width: 200px; padding-right: 10px;
+  font-family: 'Courier New', monospace; font-size: 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; align-items: center;
+}
+.wf-label-connector { color: var(--border); margin-right: 4px; flex-shrink: 0; }
+.wf-track { flex: 1; height: 20px; position: relative; background: rgba(33,38,45,0.7); border-radius: 2px; }
+.wf-bar {
+  position: absolute; top: 3px; height: 14px; border-radius: 2px;
+  min-width: 3px; display: flex; align-items: center; overflow: hidden;
+}
+.wf-bar-label { font-size: 9px; padding: 0 4px; white-space: nowrap; overflow: hidden; }
+.wf-dur { width: 48px; min-width: 48px; text-align: right; color: var(--dim); font-size: 10px; padding-left: 6px; }
+
+.slow-callout {
+  background: rgba(227,179,65,0.06); border: 1px solid rgba(227,179,65,0.3);
+  border-radius: 6px; padding: 8px 12px; margin-top: 12px;
+  font-size: 11px; display: flex; flex-direction: column; gap: 4px;
+}
+.slow-callout-row { display: flex; gap: 8px; align-items: baseline; }
+.slow-callout-label { color: var(--yellow); flex-shrink: 0; }
+.slow-callout-name  { color: var(--muted); font-family: 'Courier New', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.slow-callout-dur   { color: var(--yellow); flex-shrink: 0; }
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; min-height: 300px; gap: 14px; color: var(--muted); text-align: center;
+}
+.empty-state code {
+  font-family: 'Courier New', monospace; font-size: 11px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 5px; padding: 10px 16px;
+  display: block; text-align: left; color: var(--text); line-height: 1.8;
+}
+
+/* ── Error cards ── */
+.error-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.error-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.error-card-endpoint { font-family: 'Courier New', monospace; font-size: 12px; color: var(--blue); }
+.error-card-msg { font-family: 'Courier New', monospace; font-size: 11px; color: var(--red); margin-bottom: 10px; line-height: 1.5; }
+.error-card-footer { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--dim); }
+.error-count { color: var(--text); font-weight: 500; }
+.error-link { color: var(--blue); cursor: pointer; text-decoration: underline; }
+.error-link:hover { color: var(--text); }
+
+/* ── No-trace placeholder ── */
+.no-trace {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; color: var(--muted); font-size: 12px;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+</style>
+</head>
+<body x-data="lx()" x-init="init()">
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar">
+    <div class="logo">latency<span>x</span></div>
+
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item" :class="{active: page==='dashboard'}" @click="goto('dashboard')">
+        <div class="nav-dot green"></div>
+        dashboard
+      </div>
+      <div class="nav-item" :class="{active: page==='endpoints'}" @click="goto('endpoints')">
+        <div class="nav-dot blue"></div>
+        endpoints
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Explore</div>
+      <div class="nav-item" :class="{active: page==='traces'}" @click="goto('traces')">
+        <div class="nav-dot" :class="traces.length ? 'blue' : ''"></div>
+        traces
+      </div>
+      <div class="nav-item" :class="{active: page==='errors'}" @click="goto('errors')">
+        <div class="nav-dot" :class="errors.length ? 'red' : ''"></div>
+        errors
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="service-name" x-text="meta.service || 'default'"></div>
+      <div x-text="meta.db_name || 'latencyx_traces.db'"></div>
+      <div x-text="(meta.span_count || 0).toLocaleString() + ' spans'"></div>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="topbar-title" x-text="pageTitles[page]"></div>
+      <div class="time-pills">
+        <template x-for="p in ['1h','6h','24h','7d']" :key="p">
+          <div class="pill" :class="{active: since===p}" @click="setSince(p)" x-text="p"></div>
+        </template>
+      </div>
+      <div class="divider-v"></div>
+      <div class="live-dot"><div class="pulse"></div> live</div>
+    </div>
+
+    <!-- ════════════════════════════════ DASHBOARD ════════════════════════════ -->
+    <div class="content" x-show="page==='dashboard'" x-cloak>
+
+      <!-- Stat cards -->
+      <div class="grid-4" :class="{flash: flashed}">
+
+        <div class="card">
+          <div class="card-label">Requests</div>
+          <div class="card-value" x-text="(stats.total||0).toLocaleString()"></div>
+          <div class="card-sub" x-text="'last ' + since"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Error Rate</div>
+          <div class="card-value"
+               :class="(stats.error_rate||0) > 1 ? 'c-red' : 'c-green'"
+               x-text="(stats.error_rate||0).toFixed(1) + '%'"></div>
+          <div class="card-sub" x-text="(stats.errors||0) + ' errors'"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">p95 Latency</div>
+          <div class="card-value"
+               :class="durColor(stats.p95)"
+               x-text="fmtDur(stats.p95)"></div>
+          <div class="card-sub" x-text="'p50 → ' + fmtDur(stats.p50)"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Slowest Endpoint</div>
+          <div class="card-value mono" style="font-size:12px; color: var(--red)"
+               x-text="stats.slowest ? truncate(stats.slowest.name, 28) : '—'"></div>
+          <div class="card-sub"
+               x-text="stats.slowest ? 'p95 ' + fmtDur(stats.slowest.p95) : 'no data'"></div>
+        </div>
+
+      </div>
+
+      <!-- Sparklines -->
+      <div class="section-label">top endpoints</div>
+      <div class="grid-3" x-show="sparkEndpoints.length > 0">
+        <template x-for="(ep, i) in sparkEndpoints.slice(0,3)" :key="ep">
+          <div class="card sparkline-card">
+            <div class="sparkline-header">
+              <div class="sparkline-path" :title="ep" x-text="ep"></div>
+              <div class="sparkline-p95"
+                   :class="durColor(sparklines[ep] && sparklines[ep].p95 ? Math.max(...sparklines[ep].p95.filter(v=>v)) : 0)"
+                   x-text="fmtDur(sparklines[ep] && sparklines[ep].p95 ? Math.max(...sparklines[ep].p95.filter(v=>v)) : 0)"></div>
+            </div>
+            <div class="spark-container" :id="'spark-' + i"></div>
+          </div>
+        </template>
+      </div>
+      <div x-show="sparkEndpoints.length === 0 && !loading" style="color: var(--dim); font-size:11px; padding: 4px 0 10px;">no sparkline data yet</div>
+
+      <!-- Endpoints table -->
+      <div class="section-label">endpoints</div>
+      <div x-show="endpoints.length === 0 && !loading" class="empty-state" style="min-height:120px">
+        <div>no endpoint data yet</div>
+      </div>
+      <table class="data-table" x-show="endpoints.length > 0">
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th class="r">Requests</th>
+            <th class="r">p50</th>
+            <th class="r">p95</th>
+            <th class="r">Latency</th>
+            <th class="r">Errors</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="ep in endpoints.slice(0,8)" :key="ep.name">
+            <tr @click="gotoTraces(ep.name)">
+              <td>
+                <span class="badge" :class="'badge-' + methodFromName(ep.name)" x-text="methodFromName(ep.name)"></span>
+                <span class="mono c-blue" style="font-size:11px" x-text="pathFromName(ep.name)"></span>
+              </td>
+              <td class="r" x-text="ep.count.toLocaleString()"></td>
+              <td class="r" :class="durColor(ep.p50)" x-text="fmtDur(ep.p50)"></td>
+              <td class="r" :class="durColor(ep.p95)" x-text="fmtDur(ep.p95)"></td>
+              <td class="r">
+                <span class="lat-track">
+                  <span class="lat-fill" :style="latBar(ep.p95)"></span>
+                </span>
+              </td>
+              <td class="r" :class="ep.error_rate > 5 ? 'c-red' : ep.error_rate > 1 ? 'c-yellow' : 'c-dim'"
+                  x-text="ep.error_rate > 0 ? ep.error_rate.toFixed(1) + '%' : '—'"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+    </div><!-- /dashboard -->
+
+    <!-- ════════════════════════════════ TRACES ═══════════════════════════════ -->
+    <div x-show="page==='traces'" x-cloak class="traces-wrap">
+
+      <!-- Trace list -->
+      <div class="trace-list-panel">
+        <div class="trace-filters">
+          <div class="filter-row">
+            <input class="filter-input" type="text" placeholder="filter by path…"
+                   x-model.debounce.400ms="traceFilter.path" @input="fetchTraces()">
+          </div>
+          <div class="filter-row">
+            <select class="filter-select" x-model="traceFilter.status" @change="fetchTraces()">
+              <option value="">all status</option>
+              <option value="2">2xx</option>
+              <option value="4">4xx</option>
+              <option value="5">5xx</option>
+            </select>
+            <input class="filter-input" type="number" placeholder="min ms…"
+                   x-model.debounce.400ms="traceFilter.minDuration" @input="fetchTraces()"
+                   style="width:80px; flex:0 0 80px;">
+          </div>
+        </div>
+
+        <div class="trace-list">
+          <template x-if="traces.length === 0">
+            <div class="empty-state">
+              <div>no traces yet</div>
+            </div>
+          </template>
+          <template x-for="t in traces" :key="t.trace_id">
+            <div class="trace-row" :class="{selected: selectedTraceId === t.trace_id}"
+                 @click="selectTrace(t.trace_id)">
+              <div class="trace-row-top">
+                <span class="trace-ts" x-text="relTime(t.started_at)"></span>
+                <span class="badge" :class="'badge-' + (t.method||'GET')" x-text="t.method||'GET'"></span>
+                <span class="badge" :class="statusBadgeClass(t.status_code)"
+                      x-text="t.status_code||'—'"></span>
+                <span class="trace-dur" :class="durColor(t.duration_ms)" x-text="fmtDur(t.duration_ms)"></span>
+              </div>
+              <div class="trace-path" :title="t.path || t.span_name" x-text="t.path || t.span_name"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Waterfall -->
+      <div class="trace-detail-panel">
+        <template x-if="!selectedTraceId">
+          <div class="no-trace">← select a trace to inspect it</div>
+        </template>
+        <template x-if="selectedTraceId && traceDetail">
+          <div class="waterfall">
+            <div class="wf-header">
+              <span class="badge" :class="'badge-' + rootMethod(traceDetail)" x-text="rootMethod(traceDetail)"></span>
+              <span class="wf-title" x-text="rootPath(traceDetail)"></span>
+              <span class="badge" :class="statusBadgeClass(rootStatus(traceDetail))" x-text="rootStatus(traceDetail)||'—'"></span>
+              <span class="wf-total" x-text="fmtDur(traceDetail.total_duration_ms)"></span>
+              <span class="c-dim" style="font-size:10px" x-text="traceDetail.span_count + ' spans'"></span>
+            </div>
+            <!-- ruler -->
+            <div class="wf-ruler" id="wf-ruler"></div>
+            <!-- rows rendered by JS -->
+            <div id="wf-rows"></div>
+            <!-- slow callout -->
+            <div id="wf-callout"></div>
+          </div>
+        </template>
+      </div>
+
+    </div><!-- /traces -->
+
+    <!-- ════════════════════════════════ ENDPOINTS ════════════════════════════ -->
+    <div class="content" x-show="page==='endpoints'" x-cloak>
+      <div x-show="endpoints.length === 0 && !loading" class="empty-state">
+        <div>no endpoint data yet</div>
+      </div>
+      <table class="data-table" x-show="endpoints.length > 0">
+        <thead>
+          <tr>
+            <th>Path</th>
+            <th class="r">Requests</th>
+            <th class="r">p50</th>
+            <th class="r">p95</th>
+            <th class="r">Latency</th>
+            <th class="r">Error Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="ep in endpoints" :key="ep.name">
+            <tr @click="gotoTraces(ep.name)">
+              <td>
+                <span class="badge" :class="'badge-' + methodFromName(ep.name)" x-text="methodFromName(ep.name)"></span>
+                <span class="mono c-blue" style="font-size:11px" x-text="pathFromName(ep.name)"></span>
+              </td>
+              <td class="r" x-text="ep.count.toLocaleString()"></td>
+              <td class="r" :class="durColor(ep.p50)" x-text="fmtDur(ep.p50)"></td>
+              <td class="r" :class="durColor(ep.p95)" x-text="fmtDur(ep.p95)"></td>
+              <td class="r">
+                <span class="lat-track">
+                  <span class="lat-fill" :style="latBar(ep.p95)"></span>
+                </span>
+              </td>
+              <td class="r" :class="ep.error_rate > 5 ? 'c-red' : ep.error_rate > 1 ? 'c-yellow' : 'c-dim'"
+                  x-text="ep.error_rate > 0 ? ep.error_rate.toFixed(1) + '%' : '—'"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div><!-- /endpoints -->
+
+    <!-- ════════════════════════════════ ERRORS ══════════════════════════════ -->
+    <div class="content" x-show="page==='errors'" x-cloak>
+      <template x-if="errors.length === 0 && !loading">
+        <div class="empty-state">
+          <div style="color: var(--green)">no errors — looking good</div>
+        </div>
+      </template>
+      <template x-for="e in errors" :key="e.endpoint + e.error">
+        <div class="error-card">
+          <div class="error-card-header">
+            <span class="badge badge-GET">endpoint</span>
+            <span class="error-card-endpoint" x-text="e.endpoint || '—'"></span>
+          </div>
+          <div class="error-card-msg" :title="e.error" x-text="truncate(e.error, 120)"></div>
+          <div class="error-card-footer">
+            <span class="error-count" x-text="e.count + (e.count === 1 ? ' occurrence' : ' occurrences')"></span>
+            <span class="error-link" @click="gotoTraces(e.endpoint)">view traces →</span>
+          </div>
+        </div>
+      </template>
+    </div><!-- /errors -->
+
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+function lx() {
+  return {
+    // ── State ──────────────────────────────────────────────────────────
+    page: 'dashboard',
+    since: '6h',
+    loading: false,
+    flashed: false,
+
+    stats: {},
+    endpoints: [],
+    traces: [],
+    errors: [],
+    sparklines: {},
+    sparkEndpoints: [],
+    traceDetail: null,
+    selectedTraceId: null,
+    meta: {},
+
+    traceFilter: { path: '', status: '', minDuration: '' },
+
+    pageTitles: {
+      dashboard: 'dashboard',
+      endpoints: 'endpoints',
+      traces: 'traces',
+      errors: 'errors',
+    },
+
+    _charts: {},
+    _timer: null,
+
+    // ── Lifecycle ──────────────────────────────────────────────────────
+    init() {
+      this.refresh();
+      this._timer = setInterval(() => this.refresh(), 5000);
+    },
+
+    async refresh() {
+      await this.fetchAll();
+    },
+
+    async fetchAll() {
+      const p = this.page;
+      const tasks = [this.fetchStats(), this.fetchEndpoints()];
+      if (p === 'traces')    tasks.push(this.fetchTraces());
+      if (p === 'errors')    tasks.push(this.fetchErrors());
+      if (p === 'dashboard') tasks.push(this.fetchSparklines());
+      await Promise.all(tasks);
+      this._flash();
+    },
+
+    _flash() {
+      this.flashed = false;
+      this.$nextTick(() => { this.flashed = true; });
+    },
+
+    // ── Navigation ─────────────────────────────────────────────────────
+    goto(p) {
+      this.page = p;
+      this.selectedTraceId = null;
+      this.traceDetail = null;
+      this.fetchAll();
+    },
+
+    gotoTraces(path) {
+      this.traceFilter.path = this.pathFromName(path);
+      this.page = 'traces';
+      this.fetchTraces();
+    },
+
+    setSince(s) {
+      this.since = s;
+      this.selectedTraceId = null;
+      this.traceDetail = null;
+      this.fetchAll();
+    },
+
+    // ── Fetchers ───────────────────────────────────────────────────────
+    async fetchStats() {
+      try {
+        const r = await fetch(`/api/stats?since=${this.since}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        this.stats = d;
+        this.meta = { db_name: d.db_name, span_count: d.span_count, service: d.service };
+      } catch(e) {}
+    },
+
+    async fetchEndpoints() {
+      try {
+        const r = await fetch(`/api/endpoints?since=${this.since}&sort=p95`);
+        if (!r.ok) return;
+        this.endpoints = await r.json();
+      } catch(e) {}
+    },
+
+    async fetchTraces() {
+      try {
+        let url = `/api/traces?since=${this.since}&limit=60`;
+        if (this.traceFilter.path)        url += `&path=${encodeURIComponent(this.traceFilter.path)}`;
+        if (this.traceFilter.minDuration) url += `&min_duration=${this.traceFilter.minDuration}`;
+        if (this.traceFilter.status) {
+          const s = this.traceFilter.status;
+          if (s === '2') url += '&status_class=2';
+          else if (s === '4') url += '&status_class=4';
+          else if (s === '5') url += '&status_class=5';
+        }
+        const r = await fetch(url);
+        if (!r.ok) return;
+        this.traces = await r.json();
+      } catch(e) {}
+    },
+
+    async fetchErrors() {
+      try {
+        const r = await fetch(`/api/errors?since=${this.since}`);
+        if (!r.ok) return;
+        this.errors = await r.json();
+      } catch(e) {}
+    },
+
+    async fetchSparklines() {
+      try {
+        const r = await fetch(`/api/sparklines?since=${this.since}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        this.sparklines = d;
+        this.sparkEndpoints = Object.keys(d);
+        this.$nextTick(() => this._initSparklines());
+      } catch(e) {}
+    },
+
+    async selectTrace(id) {
+      this.selectedTraceId = id;
+      this.traceDetail = null;
+      try {
+        const r = await fetch(`/api/traces/${id}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        this.traceDetail = d;
+        this.$nextTick(() => this._renderWaterfall(d));
+      } catch(e) {}
+    },
+
+    // ── Sparklines (uPlot) ─────────────────────────────────────────────
+    _sparkLabels() {
+      const windows = {
+        '1h':  ['55m','45m','35m','25m','15m','now'],
+        '6h':  ['5h','4h','3h','2h','1h','now'],
+        '24h': ['20h','16h','12h','8h','4h','now'],
+        '7d':  ['6d','5d','4d','3d','2d','now'],
+      };
+      return windows[this.since] || windows['6h'];
+    },
+
+    _initSparklines() {
+      this.sparkEndpoints.slice(0, 3).forEach((ep, i) => {
+        const container = document.getElementById(`spark-${i}`);
+        if (!container) return;
+        if (this._charts[i]) {
+          this._charts[i].destroy();
+          container.innerHTML = '';
+        }
+
+        const data = this.sparklines[ep] || {};
+        const p95vals = (data.p95 || []).map(v => v == null ? 0 : v);
+        const peak = Math.max(...p95vals, 1);
+        const col = peak < 150 ? '#3fb950' : peak < 500 ? '#e3b341' : '#f85149';
+        const fill = peak < 150 ? 'rgba(63,185,80,0.08)' : peak < 500 ? 'rgba(227,179,65,0.08)' : 'rgba(248,81,73,0.08)';
+
+        const w = container.offsetWidth || 260;
+        const xVals = p95vals.map((_, idx) => idx);
+
+        const opts = {
+          width: w,
+          height: 42,
+          series: [
+            {},
+            {
+              stroke: col,
+              width: 1.5,
+              fill: fill,
+            },
+          ],
+          axes: [{ show: false }, { show: false }],
+          legend: { show: false },
+          cursor: { show: false },
+          scales: { x: { time: false }, y: { min: 0 } },
+          padding: [4, 0, 0, 0],
+        };
+
+        this._charts[i] = new uPlot(opts, [xVals, p95vals], container);
+      });
+    },
+
+    // ── Waterfall ──────────────────────────────────────────────────────
+    _renderWaterfall(d) {
+      const ruler = document.getElementById('wf-ruler');
+      const rowsEl = document.getElementById('wf-rows');
+      const calloutEl = document.getElementById('wf-callout');
+      if (!ruler || !rowsEl || !calloutEl) return;
+
+      const total = d.total_duration_ms || 1;
+
+      // Ruler
+      let rulerHtml = '';
+      for (let i = 0; i <= 4; i++) {
+        const ms = Math.round(total * i / 4);
+        rulerHtml += `<span class="wf-ruler-mark" style="left:${i * 25}%">${this.fmtDur(ms)}</span>`;
+      }
+      ruler.innerHTML = rulerHtml;
+
+      // Rows
+      let rowsHtml = '';
+      const slowSpans = [];
+
+      const renderSpan = (span, depth) => {
+        const leftPct = Math.max(0, Math.min(98, (span.offset_ms || 0) / total * 100));
+        const widthPct = Math.max(2, Math.min(100 - leftPct, (span.duration_ms || 0) / total * 100));
+
+        let barBg = 'rgba(121,192,255,0.15)';
+        let labelCol = '#79c0ff';
+        let typeLabel = span.span_type || '';
+
+        if (span.span_type === 'db.query') {
+          barBg = span.slow ? 'rgba(227,179,65,0.15)' : 'rgba(63,185,80,0.12)';
+          labelCol = span.slow ? '#e3b341' : '#3fb950';
+        } else if (span.span_type === 'http.client') {
+          barBg = 'rgba(192,132,252,0.15)'; labelCol = '#c084fc';
+        } else if (span.span_type === 'generic') {
+          barBg = 'rgba(110,118,129,0.2)'; labelCol = '#e6edf3';
+        }
+
+        const namePrefix = span.slow && span.span_type === 'db.query' ? '⚠ ' : '';
+        const indent = '&nbsp;&nbsp;'.repeat(depth);
+        const connector = depth > 0 ? '<span class="wf-label-connector">├─</span>' : '';
+        const barLabel = widthPct > 12 ? `<span class="wf-bar-label" style="color:${labelCol}">${typeLabel}</span>` : '';
+
+        rowsHtml += `
+          <div class="wf-row">
+            <div class="wf-label" style="color:${labelCol}" title="${span.span_name}">
+              ${indent}${connector}${namePrefix}${(span.span_name||'').substring(0,28)}
+            </div>
+            <div class="wf-track">
+              <div class="wf-bar" style="left:${leftPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%;background:${barBg}">
+                ${barLabel}
+              </div>
+            </div>
+            <div class="wf-dur">${this.fmtDur(span.duration_ms)}</div>
+          </div>`;
+
+        if (span.slow) slowSpans.push(span);
+        for (const child of (span.children || [])) renderSpan(child, depth + 1);
+      };
+
+      for (const s of (d.spans || [])) renderSpan(s, 0);
+      rowsEl.innerHTML = rowsHtml;
+
+      // Slow callout
+      if (slowSpans.length > 0) {
+        let ch = '<div class="slow-callout">';
+        for (const s of slowSpans) {
+          ch += `<div class="slow-callout-row">
+            <span class="slow-callout-label">⚠ slow span</span>
+            <span class="slow-callout-name" title="${s.span_name}">${(s.span_name||'').substring(0,80)}</span>
+            <span class="slow-callout-dur">${this.fmtDur(s.duration_ms)}</span>
+          </div>`;
+        }
+        ch += '</div>';
+        calloutEl.innerHTML = ch;
+      } else {
+        calloutEl.innerHTML = '';
+      }
+    },
+
+    // ── Formatters ─────────────────────────────────────────────────────
+    fmtDur(ms) {
+      if (ms == null) return '—';
+      if (ms < 100)  return ms.toFixed(2) + 'ms';
+      if (ms < 1000) return ms.toFixed(1) + 'ms';
+      return (ms / 1000).toFixed(2) + 's';
+    },
+
+    durColor(ms) {
+      if (ms == null) return 'c-dim';
+      if (ms < 150)  return 'c-green';
+      if (ms < 500)  return 'c-yellow';
+      return 'c-red';
+    },
+
+    latBar(p95) {
+      const max = Math.max(...this.endpoints.map(e => e.p95 || 0), 1);
+      const pct = Math.min(100, ((p95 || 0) / max) * 100);
+      const col = (p95 || 0) < 150 ? 'var(--green)' : (p95 || 0) < 500 ? 'var(--yellow)' : 'var(--red)';
+      return `width:${pct.toFixed(1)}%;background:${col}`;
+    },
+
+    truncate(s, n) {
+      if (!s) return '—';
+      return s.length > n ? s.substring(0, n) + '…' : s;
+    },
+
+    relTime(epoch) {
+      if (!epoch) return '';
+      const diff = Date.now() / 1000 - epoch;
+      if (diff < 60)   return Math.round(diff) + 's ago';
+      if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+      return Math.round(diff / 3600) + 'h ago';
+    },
+
+    methodFromName(name) {
+      if (!name) return 'GET';
+      const m = name.match(/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)/);
+      return m ? m[1] : 'GET';
+    },
+
+    pathFromName(name) {
+      if (!name) return name;
+      const m = name.match(/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(.+)$/);
+      return m ? m[2] : name;
+    },
+
+    statusBadgeClass(code) {
+      if (!code) return '';
+      if (code < 300) return 'badge-2xx';
+      if (code < 500) return 'badge-4xx';
+      return 'badge-5xx';
+    },
+
+    rootMethod(detail) {
+      if (!detail || !detail.spans || !detail.spans[0]) return 'GET';
+      return this.methodFromName(detail.spans[0].span_name);
+    },
+
+    rootPath(detail) {
+      if (!detail || !detail.spans || !detail.spans[0]) return '';
+      const s = detail.spans[0];
+      return s.path || this.pathFromName(s.span_name);
+    },
+
+    rootStatus(detail) {
+      if (!detail || !detail.spans || !detail.spans[0]) return null;
+      return detail.spans[0].status_code;
+    },
+  };
+}
+</script>
+</body>
+</html>
