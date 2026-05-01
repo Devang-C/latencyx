@@ -247,12 +247,16 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 /* ── Waterfall ── */
 .waterfall { font-size: 11px; }
-.wf-header { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wf-header { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wf-title { font-size: 13px; font-weight: 500; font-family: 'Courier New', monospace; color: var(--blue); }
 .wf-total { color: var(--muted); font-size: 11px; }
 
+.wf-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-r); }
+.wf-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); }
+.wf-legend-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
 .wf-ruler {
-  position: relative; height: 18px; margin-bottom: 4px; margin-left: 200px;
+  position: relative; height: 18px; margin-bottom: 2px; margin-left: 216px;
   border-bottom: 1px solid var(--border);
 }
 .wf-ruler-mark {
@@ -260,21 +264,34 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   font-size: 9px; color: var(--dim); white-space: nowrap;
 }
 
-.wf-row { display: flex; align-items: center; min-height: 26px; }
+.wf-row { display: flex; align-items: center; min-height: 32px; border-radius: 3px; transition: background 0.1s; }
+.wf-row:hover { background: rgba(255,255,255,0.03); }
 .wf-label {
-  width: 200px; min-width: 200px; padding-right: 10px;
+  width: 216px; min-width: 216px; padding-right: 8px;
   font-family: 'Courier New', monospace; font-size: 10px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  display: flex; align-items: center;
+  display: flex; align-items: center; gap: 5px;
 }
-.wf-label-connector { color: var(--border); margin-right: 4px; flex-shrink: 0; }
-.wf-track { flex: 1; height: 20px; position: relative; background: rgba(33,38,45,0.7); border-radius: 2px; }
+.wf-type-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.wf-track { flex: 1; height: 24px; position: relative; border-radius: 2px; }
 .wf-bar {
-  position: absolute; top: 3px; height: 14px; border-radius: 2px;
-  min-width: 3px; display: flex; align-items: center; overflow: hidden;
+  position: absolute; top: 4px; height: 16px; border-radius: 3px;
+  min-width: 4px; display: flex; align-items: center; overflow: hidden;
+  border-left: 2px solid transparent;
 }
-.wf-bar-label { font-size: 9px; padding: 0 4px; white-space: nowrap; overflow: hidden; }
-.wf-dur { width: 48px; min-width: 48px; text-align: right; color: var(--dim); font-size: 10px; padding-left: 6px; }
+.wf-bar-label { font-size: 9px; padding: 0 5px; white-space: nowrap; overflow: hidden; font-weight: 500; letter-spacing: 0.02em; }
+.wf-dur { width: 54px; min-width: 54px; text-align: right; font-size: 10px; padding-left: 8px; }
+
+/* ── Waterfall tooltip ── */
+.wf-tooltip {
+  display: none; position: fixed;
+  background: #161b22; border: 1px solid #30363d;
+  border-radius: 6px; padding: 8px 12px;
+  font-size: 11px; color: #e6edf3;
+  white-space: pre; pointer-events: none;
+  z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+  font-family: 'Courier New', monospace; line-height: 1.8;
+}
 
 .slow-callout {
   background: rgba(227,179,65,0.06); border: 1px solid rgba(227,179,65,0.3);
@@ -315,6 +332,29 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   display: flex; align-items: center; justify-content: center;
   height: 100%; color: var(--muted); font-size: 12px;
 }
+
+/* ── Copy button ── */
+.copy-btn {
+  font-size: 10px; padding: 3px 9px; border-radius: 4px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--muted); cursor: pointer; font-family: inherit;
+  transition: all 0.15s; margin-left: auto;
+}
+.copy-btn:hover { border-color: var(--dim); color: var(--text); }
+.copy-btn.copied { border-color: var(--green); color: var(--green); background: rgba(63,185,80,0.08); }
+
+/* ── Sortable table headers ── */
+.sort-th { cursor: pointer; user-select: none; }
+.sort-th:hover { color: var(--muted); }
+.sort-th.sorted { color: var(--blue); }
+.sort-arrow { margin-left: 3px; opacity: 0.7; }
+
+/* ── Volume chart ── */
+.vol-card { padding: 12px 16px 8px; }
+.vol-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.vol-title { font-size: 9px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.vol-total { font-size: 11px; color: var(--muted); }
+#vol-chart .uplot { width: 100% !important; }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -401,7 +441,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           <div class="card-value"
                :class="durColor(stats.p95)"
                x-text="fmtDur(stats.p95)"></div>
-          <div class="card-sub" x-text="'p50 → ' + fmtDur(stats.p50)"></div>
+          <div class="card-sub" x-text="'p50 ' + fmtDur(stats.p50) + ' · p99 ' + fmtDur(stats.p99)"></div>
         </div>
 
         <div class="card">
@@ -414,6 +454,17 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
       </div>
 
+      <!-- Volume chart -->
+      <div class="section-label">request volume</div>
+      <div class="card vol-card" x-show="volume && volume.counts">
+        <div class="vol-header">
+          <span class="vol-title" x-text="'last ' + since"></span>
+          <span class="vol-total" x-text="(stats.total||0).toLocaleString() + ' requests'"></span>
+        </div>
+        <div id="vol-chart"></div>
+      </div>
+      <div x-show="!volume || !volume.counts" style="color: var(--dim); font-size:11px; padding: 4px 0 10px;">no volume data yet</div>
+
       <!-- Sparklines -->
       <div class="section-label">top endpoints</div>
       <div class="grid-3" x-show="sparkEndpoints.length > 0">
@@ -422,8 +473,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
             <div class="sparkline-header">
               <div class="sparkline-path" :title="ep" x-text="ep"></div>
               <div class="sparkline-p95"
-                   :class="durColor(sparklines[ep] && sparklines[ep].p95 ? Math.max(...sparklines[ep].p95.filter(v=>v)) : 0)"
-                   x-text="fmtDur(sparklines[ep] && sparklines[ep].p95 ? Math.max(...sparklines[ep].p95.filter(v=>v)) : 0)"></div>
+                   :class="durColor(sparkPeak(ep))"
+                   x-text="fmtDur(sparkPeak(ep))"></div>
             </div>
             <div class="spark-container" :id="'spark-' + i"></div>
           </div>
@@ -440,11 +491,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
         <thead>
           <tr>
             <th>Path</th>
-            <th class="r">Requests</th>
-            <th class="r">p50</th>
-            <th class="r">p95</th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='count'}" @click="sortEndpoints('count')">Requests<span class="sort-arrow" x-show="endpointSort==='count'">↓</span></th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='p50'}"   @click="sortEndpoints('p50')">p50<span class="sort-arrow" x-show="endpointSort==='p50'">↓</span></th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='p95'}"   @click="sortEndpoints('p95')">p95<span class="sort-arrow" x-show="endpointSort==='p95'">↓</span></th>
             <th class="r">Latency</th>
-            <th class="r">Errors</th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='errors'}" @click="sortEndpoints('errors')">Errors<span class="sort-arrow" x-show="endpointSort==='errors'">↓</span></th>
           </tr>
         </thead>
         <tbody>
@@ -492,6 +543,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
                    x-model.debounce.400ms="traceFilter.minDuration" @input="fetchTraces()"
                    style="width:80px; flex:0 0 80px;">
           </div>
+          <div style="font-size:10px; color:var(--dim)" x-show="traces.length > 0">
+            <span x-text="_tracesHasMore ? 'showing 60 of 60+ traces' : traces.length + (traces.length === 1 ? ' trace' : ' traces')"></span>
+          </div>
         </div>
 
         <div class="trace-list">
@@ -529,7 +583,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
               <span class="badge" :class="statusBadgeClass(rootStatus(traceDetail))" x-text="rootStatus(traceDetail)||'—'"></span>
               <span class="wf-total" x-text="fmtDur(traceDetail.total_duration_ms)"></span>
               <span class="c-dim" style="font-size:10px" x-text="traceDetail.span_count + ' spans'"></span>
+              <button class="copy-btn" :class="{copied: _copyMsg}" @click="copyTraceId()" x-text="_copyMsg ? 'copied!' : 'copy id'"></button>
             </div>
+            <div id="wf-legend" class="wf-legend"></div>
             <!-- ruler -->
             <div class="wf-ruler" id="wf-ruler"></div>
             <!-- rows rendered by JS -->
@@ -551,11 +607,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
         <thead>
           <tr>
             <th>Path</th>
-            <th class="r">Requests</th>
-            <th class="r">p50</th>
-            <th class="r">p95</th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='count'}" @click="sortEndpoints('count')">Requests<span class="sort-arrow" x-show="endpointSort==='count'">↓</span></th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='p50'}"   @click="sortEndpoints('p50')">p50<span class="sort-arrow" x-show="endpointSort==='p50'">↓</span></th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='p95'}"   @click="sortEndpoints('p95')">p95<span class="sort-arrow" x-show="endpointSort==='p95'">↓</span></th>
             <th class="r">Latency</th>
-            <th class="r">Error Rate</th>
+            <th class="r sort-th" :class="{sorted: endpointSort==='errors'}" @click="sortEndpoints('errors')">Error Rate<span class="sort-arrow" x-show="endpointSort==='errors'">↓</span></th>
           </tr>
         </thead>
         <tbody>
@@ -605,6 +661,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
   </div><!-- /main -->
 </div><!-- /layout -->
+<div id="wf-tooltip" class="wf-tooltip"></div>
 
 <script>
 function lx() {
@@ -621,11 +678,15 @@ function lx() {
     errors: [],
     sparklines: {},
     sparkEndpoints: [],
+    volume: null,
     traceDetail: null,
     selectedTraceId: null,
     meta: {},
 
     traceFilter: { path: '', status: '', minDuration: '' },
+    endpointSort: 'p95',
+    _tracesHasMore: false,
+    _copyMsg: false,
 
     pageTitles: {
       dashboard: 'dashboard',
@@ -652,7 +713,7 @@ function lx() {
       const tasks = [this.fetchStats(), this.fetchEndpoints()];
       if (p === 'traces')    tasks.push(this.fetchTraces());
       if (p === 'errors')    tasks.push(this.fetchErrors());
-      if (p === 'dashboard') tasks.push(this.fetchSparklines());
+      if (p === 'dashboard') tasks.push(this.fetchSparklines(), this.fetchVolume());
       await Promise.all(tasks);
       this._flash();
     },
@@ -696,7 +757,7 @@ function lx() {
 
     async fetchEndpoints() {
       try {
-        const r = await fetch(`/api/endpoints?since=${this.since}&sort=p95`);
+        const r = await fetch(`/api/endpoints?since=${this.since}&sort=${this.endpointSort}`);
         if (!r.ok) return;
         this.endpoints = await r.json();
       } catch(e) {}
@@ -704,7 +765,7 @@ function lx() {
 
     async fetchTraces() {
       try {
-        let url = `/api/traces?since=${this.since}&limit=60`;
+        let url = `/api/traces?since=${this.since}&limit=61`;
         if (this.traceFilter.path)        url += `&path=${encodeURIComponent(this.traceFilter.path)}`;
         if (this.traceFilter.minDuration) url += `&min_duration=${this.traceFilter.minDuration}`;
         if (this.traceFilter.status) {
@@ -715,7 +776,9 @@ function lx() {
         }
         const r = await fetch(url);
         if (!r.ok) return;
-        this.traces = await r.json();
+        const data = await r.json();
+        this._tracesHasMore = data.length > 60;
+        this.traces = data.slice(0, 60);
       } catch(e) {}
     },
 
@@ -735,6 +798,29 @@ function lx() {
         this.sparklines = d;
         this.sparkEndpoints = Object.keys(d);
         this.$nextTick(() => this._initSparklines());
+      } catch(e) {}
+    },
+
+    async fetchVolume() {
+      try {
+        const r = await fetch(`/api/volume?since=${this.since}`);
+        if (!r.ok) return;
+        this.volume = await r.json();
+        this.$nextTick(() => this._initVolumeChart());
+      } catch(e) {}
+    },
+
+    sortEndpoints(col) {
+      this.endpointSort = col;
+      this.fetchEndpoints();
+    },
+
+    async copyTraceId() {
+      if (!this.traceDetail) return;
+      try {
+        await navigator.clipboard.writeText(this.traceDetail.trace_id);
+        this._copyMsg = true;
+        setTimeout(() => { this._copyMsg = false; }, 1500);
       } catch(e) {}
     },
 
@@ -772,7 +858,8 @@ function lx() {
 
         const data = this.sparklines[ep] || {};
         const p95vals = (data.p95 || []).map(v => v == null ? 0 : v);
-        const peak = Math.max(...p95vals, 1);
+        const nonZero = p95vals.filter(v => v > 0);
+        const peak = nonZero.length ? Math.max(...nonZero) : 1;
         const col = peak < 150 ? '#3fb950' : peak < 500 ? '#e3b341' : '#f85149';
         const fill = peak < 150 ? 'rgba(63,185,80,0.08)' : peak < 500 ? 'rgba(227,179,65,0.08)' : 'rgba(248,81,73,0.08)';
 
@@ -801,11 +888,45 @@ function lx() {
       });
     },
 
+    // ── Volume chart (uPlot) ──────────────────────────────────────────
+    _initVolumeChart() {
+      if (this.page !== 'dashboard') return;
+      const container = document.getElementById('vol-chart');
+      if (!container || !this.volume) return;
+      if (this._charts['vol']) { this._charts['vol'].destroy(); container.innerHTML = ''; }
+
+      const { timestamps, counts } = this.volume;
+      if (!timestamps || !timestamps.length) return;
+
+      const w = container.offsetWidth || 700;
+      const maxCount = Math.max(...counts, 1);
+
+      const opts = {
+        width: w, height: 90,
+        series: [
+          {},
+          { stroke: '#3fb950', fill: 'rgba(63,185,80,0.1)', width: 1.5 },
+        ],
+        scales: { x: { time: true }, y: { range: [0, maxCount * 1.4] } },
+        axes: [
+          { font: '10px system-ui', stroke: '#6e7681', grid: { stroke: '#21262d', width: 1 }, ticks: { stroke: '#21262d', width: 1 } },
+          { size: 34, font: '10px system-ui', stroke: '#6e7681', grid: { stroke: '#21262d', width: 1 }, ticks: { stroke: '#21262d', width: 1 } },
+        ],
+        legend: { show: false },
+        cursor: { show: false },
+        padding: [6, 8, 0, 0],
+      };
+
+      this._charts['vol'] = new uPlot(opts, [timestamps, counts], container);
+    },
+
     // ── Waterfall ──────────────────────────────────────────────────────
     _renderWaterfall(d) {
-      const ruler = document.getElementById('wf-ruler');
-      const rowsEl = document.getElementById('wf-rows');
+      const ruler    = document.getElementById('wf-ruler');
+      const rowsEl   = document.getElementById('wf-rows');
       const calloutEl = document.getElementById('wf-callout');
+      const legendEl  = document.getElementById('wf-legend');
+      const tooltip   = document.getElementById('wf-tooltip');
       if (!ruler || !rowsEl || !calloutEl) return;
 
       const total = d.total_duration_ms || 1;
@@ -818,51 +939,104 @@ function lx() {
       }
       ruler.innerHTML = rulerHtml;
 
-      // Rows
+      // Per-type visual config
+      const TYPE_CFG = {
+        'http.server': { dot: '#58a6ff', bg: 'rgba(88,166,255,0.22)',  border: '#58a6ff', col: '#79c0ff', tag: 'http'     },
+        'db.query':    { dot: '#3fb950', bg: 'rgba(63,185,80,0.22)',   border: '#3fb950', col: '#3fb950', tag: 'db'       },
+        'http.client': { dot: '#c084fc', bg: 'rgba(192,132,252,0.22)', border: '#c084fc', col: '#c084fc', tag: 'outbound' },
+        'generic':     { dot: '#8b949e', bg: 'rgba(110,118,129,0.18)', border: '#6e7681', col: '#8b949e', tag: ''         },
+      };
+      const slowCfg = { dot: '#e3b341', bg: 'rgba(227,179,65,0.28)', border: '#e3b341', col: '#e3b341', tag: 'db ⚠' };
+
+      const getCfg = (span) => {
+        if (span.span_type === 'db.query' && span.slow) return slowCfg;
+        return TYPE_CFG[span.span_type] || TYPE_CFG['generic'];
+      };
+
+      // Build rows HTML
       let rowsHtml = '';
       const slowSpans = [];
+      const seenTypes = new Set();
 
-      const renderSpan = (span, depth) => {
-        const leftPct = Math.max(0, Math.min(98, (span.offset_ms || 0) / total * 100));
-        const widthPct = Math.max(2, Math.min(100 - leftPct, (span.duration_ms || 0) / total * 100));
+      const renderSpan = (span, depth, isLast) => {
+        seenTypes.add(span.slow && span.span_type === 'db.query' ? '__slow_db' : (span.span_type || 'generic'));
+        const leftPct  = Math.max(0, Math.min(97, (span.offset_ms || 0) / total * 100));
+        const widthPct = Math.max(1.5, Math.min(100 - leftPct, (span.duration_ms || 0) / total * 100));
+        const cfg = getCfg(span);
 
-        let barBg = 'rgba(121,192,255,0.15)';
-        let labelCol = '#79c0ff';
-        let typeLabel = span.span_type || '';
+        const indentPx = depth * 14;
+        const connector = depth > 0
+          ? `<span style="color:#484f58;margin-right:2px;flex-shrink:0">${isLast ? '└' : '├'}─</span>`
+          : '';
 
-        if (span.span_type === 'db.query') {
-          barBg = span.slow ? 'rgba(227,179,65,0.15)' : 'rgba(63,185,80,0.12)';
-          labelCol = span.slow ? '#e3b341' : '#3fb950';
-        } else if (span.span_type === 'http.client') {
-          barBg = 'rgba(192,132,252,0.15)'; labelCol = '#c084fc';
-        } else if (span.span_type === 'generic') {
-          barBg = 'rgba(110,118,129,0.2)'; labelCol = '#e6edf3';
-        }
+        const barLabel = widthPct > 11 && cfg.tag
+          ? `<span class="wf-bar-label" style="color:${cfg.col}">${cfg.tag}</span>`
+          : '';
 
-        const namePrefix = span.slow && span.span_type === 'db.query' ? '⚠ ' : '';
-        const indent = '&nbsp;&nbsp;'.repeat(depth);
-        const connector = depth > 0 ? '<span class="wf-label-connector">├─</span>' : '';
-        const barLabel = widthPct > 12 ? `<span class="wf-bar-label" style="color:${labelCol}">${typeLabel}</span>` : '';
+        const durMs = span.duration_ms || 0;
+        const durCol = durMs > 500 ? 'c-red' : durMs > 150 ? 'c-yellow' : 'c-muted';
+        const name = (span.span_name || '').substring(0, 24);
+
+        // Tooltip: use | as separator, replace on display
+        const tipText = [
+          `name: ${span.span_name || '—'}`,
+          `type: ${span.span_type || 'generic'}`,
+          `dur:  ${this.fmtDur(durMs)}`,
+          `off:  +${this.fmtDur(span.offset_ms || 0)}`,
+        ].join('|');
 
         rowsHtml += `
-          <div class="wf-row">
-            <div class="wf-label" style="color:${labelCol}" title="${span.span_name}">
-              ${indent}${connector}${namePrefix}${(span.span_name||'').substring(0,28)}
+          <div class="wf-row" data-tip="${tipText.replace(/"/g,'&quot;')}">
+            <div class="wf-label" style="color:${cfg.col}" title="${(span.span_name||'').replace(/"/g,'&quot;')}">
+              <span class="wf-type-dot" style="background:${cfg.dot}"></span>${
+                indentPx > 0 ? `<span style="display:inline-block;width:${indentPx}px;flex-shrink:0"></span>` : ''
+              }${connector}<span style="overflow:hidden;text-overflow:ellipsis">${name}</span>
             </div>
             <div class="wf-track">
-              <div class="wf-bar" style="left:${leftPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%;background:${barBg}">
-                ${barLabel}
-              </div>
+              <div class="wf-bar" style="left:${leftPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%;background:${cfg.bg};border-left-color:${cfg.border}">${barLabel}</div>
             </div>
-            <div class="wf-dur">${this.fmtDur(span.duration_ms)}</div>
+            <div class="wf-dur ${durCol}">${this.fmtDur(durMs)}</div>
           </div>`;
 
         if (span.slow) slowSpans.push(span);
-        for (const child of (span.children || [])) renderSpan(child, depth + 1);
+        const children = span.children || [];
+        children.forEach((c, i) => renderSpan(c, depth + 1, i === children.length - 1));
       };
 
-      for (const s of (d.spans || [])) renderSpan(s, 0);
+      const roots = d.spans || [];
+      roots.forEach((s, i) => renderSpan(s, 0, i === roots.length - 1));
       rowsEl.innerHTML = rowsHtml;
+
+      // Legend
+      if (legendEl) {
+        const LEGEND = [
+          { key: 'http.server', cfg: TYPE_CFG['http.server'], label: 'http server' },
+          { key: 'db.query',    cfg: TYPE_CFG['db.query'],    label: 'db query'    },
+          { key: '__slow_db',   cfg: slowCfg,                  label: 'slow db (>200ms)' },
+          { key: 'http.client', cfg: TYPE_CFG['http.client'], label: 'outbound'    },
+          { key: 'generic',     cfg: TYPE_CFG['generic'],     label: 'span'        },
+        ];
+        legendEl.innerHTML = LEGEND
+          .filter(l => seenTypes.has(l.key))
+          .map(l => `<span class="wf-legend-item"><span class="wf-legend-swatch" style="background:${l.cfg.dot}"></span>${l.label}</span>`)
+          .join('');
+      }
+
+      // Hover tooltip
+      if (tooltip) {
+        rowsEl.onmousemove = (ev) => {
+          const row = ev.target.closest('.wf-row');
+          if (row && row.dataset.tip) {
+            tooltip.textContent = row.dataset.tip.split('|').join('\n');
+            tooltip.style.display = 'block';
+            tooltip.style.left = (ev.clientX + 18) + 'px';
+            tooltip.style.top  = Math.max(8, ev.clientY - 90) + 'px';
+          } else {
+            tooltip.style.display = 'none';
+          }
+        };
+        rowsEl.onmouseleave = () => { tooltip.style.display = 'none'; };
+      }
 
       // Slow callout
       if (slowSpans.length > 0) {
@@ -879,6 +1053,12 @@ function lx() {
       } else {
         calloutEl.innerHTML = '';
       }
+    },
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    sparkPeak(ep) {
+      const vals = (this.sparklines[ep] && this.sparklines[ep].p95 || []).filter(v => v > 0);
+      return vals.length ? Math.max(...vals) : 0;
     },
 
     // ── Formatters ─────────────────────────────────────────────────────
