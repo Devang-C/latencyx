@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -75,12 +76,19 @@ class SQLiteExporter:
         # multiple threads; writes are serialised by _lock below.
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._lock = threading.Lock()
+        self._closed = False
 
         with self._lock:
             # WAL mode gives better write throughput under concurrent access
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._init_schema()
             self._conn.commit()
+
+        if config.retention_days is not None:
+            # Run cleanup once at startup in a daemon thread so it never
+            # blocks the host application's startup or request handling.
+            t = threading.Thread(target=self._cleanup_old_spans, daemon=True)
+            t.start()
 
     def _init_schema(self) -> None:
         """Create the schema on a fresh database and record the version."""
@@ -96,6 +104,20 @@ class SQLiteExporter:
                 "INSERT INTO schema_version VALUES (?, ?)",
                 (SCHEMA_VERSION, datetime.now(timezone.utc).isoformat()),
             )
+
+    def _cleanup_old_spans(self) -> None:
+        """Delete spans older than retention_days. Called once at startup in a background thread."""
+        if config.retention_days is None:
+            return
+        cutoff = time.time() - config.retention_days * 86400
+        try:
+            with self._lock:
+                if self._closed:
+                    return
+                self._conn.execute("DELETE FROM spans WHERE started_at < ?", (cutoff,))
+                self._conn.commit()
+        except Exception:
+            pass  # Never surface retention errors to the host app
 
     def export(self, span: Any) -> None:
         meta = span.metadata or {}
@@ -138,6 +160,8 @@ class SQLiteExporter:
             pass
 
     def close(self) -> None:
+        with self._lock:
+            self._closed = True
         self._conn.close()
 
     def __del__(self) -> None:

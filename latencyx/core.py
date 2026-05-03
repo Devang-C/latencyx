@@ -115,6 +115,9 @@ def init(app: Any = None, **kwargs: Any) -> None:
         elif key == "sample_rate":
             if not (0.0 <= value <= 1.0):
                 raise ValueError("sample_rate must be between 0.0 and 1.0")
+        elif key == "retention_days":
+            if value is not None and value < 1:
+                raise ValueError("retention_days must be >= 1")
 
         setattr(config, key, value)
 
@@ -136,5 +139,13 @@ def init(app: Any = None, **kwargs: Any) -> None:
             from .instrumentors.http_client import instrument_http_client
 
             instrument_http_client()
+        except (ImportError, AttributeError):
+            pass
+
+    if config.instrument_requests_client:
+        try:
+            from .instrumentors.requests_client import instrument_requests_client
+
+            instrument_requests_client()
         except (ImportError, AttributeError):
             pass

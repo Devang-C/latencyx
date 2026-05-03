@@ -1,25 +1,29 @@
 """
-LatencyX example app — FastAPI + SQLAlchemy + httpx, all auto-instrumented.
+LatencyX example app — FastAPI + SQLAlchemy + httpx + requests, all auto-instrumented.
 
 Run:
     .venv/bin/uvicorn example_app:app --reload
 
-Then hit:
+Then hit any of these endpoints:
     curl http://localhost:8000/users
     curl http://localhost:8000/users/1/orders
     curl http://localhost:8000/orders/summary
     curl http://localhost:8000/external
+    curl http://localhost:8000/external-requests
     curl http://localhost:8000/custom
+    curl http://localhost:8000/slow
 
-Watch traces in your terminal (console exporter) or query the DB:
-    sqlite3 -column -header latencyx_traces.db \
-        "SELECT span_name, round(duration_ms,2) ms, status_code, trace_id \
-         FROM spans ORDER BY started_at DESC LIMIT 20;"
+Open the dashboard:
+    latencyx serve
+
+Check that tracing is working:
+    latencyx check
 """
 
 import time
 
 import httpx
+import requests
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import text
@@ -27,17 +31,49 @@ from sqlalchemy import text
 import latencyx
 
 # ---------------------------------------------------------------------------
-# App + LatencyX
+# App setup
 # ---------------------------------------------------------------------------
 
 app = FastAPI()
 
 latencyx.init(
     app=app,
+    # ── Exporters ────────────────────────────────────────────────────────────
+    # "sqlite" (default) writes to a local DB queryable by the CLI and dashboard.
+    # Add "console" to log every span to stdout, useful during development.
+    # Add "json_file" to emit a JSONL file for log shippers.
     exporters=["sqlite", "console"],
-    time_unit="ms",
-    instrument_http_client=True,
+    sqlite_path="latencyx_traces.db",  # where the SQLite DB lives
+    # ── Sampling & filtering ─────────────────────────────────────────────────
+    # sample_rate: 1.0 = trace everything (default). Use 0.1 in high-traffic
+    # production environments to trace 10% of requests with minimal overhead.
+    sample_rate=1.0,
+    # min_duration_ms: skip exporting spans faster than this threshold.
+    # Useful to suppress noise from health checks or trivial operations.
+    # Example: min_duration_ms=5.0 ignores anything under 5ms.
     min_duration_ms=0.0,
+    # ── Retention ────────────────────────────────────────────────────────────
+    # Automatically delete spans older than N days at startup (background thread).
+    # Set to None (default) to keep everything. Recommended: 30–90 for dev/staging.
+    # retention_days=30,
+    # ── Instrumentation toggles ──────────────────────────────────────────────
+    # Each instrumentor can be disabled individually if you don't need it
+    # or if it conflicts with something in your stack.
+    instrument_http_client=True,  # trace outbound httpx calls
+    instrument_requests_client=True,  # trace outbound requests library calls
+    instrument_sqlalchemy=True,  # trace SQLAlchemy queries (wired below)
+    # ── Identity ─────────────────────────────────────────────────────────────
+    # Shown in the dashboard sidebar and stored on every span.
+    # Useful when multiple services share the same DB.
+    service_name="example-api",
+    # ── Debugging ────────────────────────────────────────────────────────────
+    # include_traceback=True attaches the full Python traceback to error spans.
+    # Useful for debugging but increases storage per error span.
+    include_traceback=False,
+    # ── Kill switch ──────────────────────────────────────────────────────────
+    # enabled=False disables all instrumentation entirely with zero overhead.
+    # Useful for local dev without any observability overhead.
+    # enabled=False,
 )
 
 # ---------------------------------------------------------------------------
@@ -46,7 +82,8 @@ latencyx.init(
 
 engine = sa.create_engine("sqlite:///example_app.db", connect_args={"check_same_thread": False})
 
-# Wire SQLAlchemy — every query becomes a child span linked to the request trace
+# Wire SQLAlchemy — every query becomes a child span linked to the request trace.
+# Call this after latencyx.init() and after creating your engine.
 latencyx.instrument_sqlalchemy(engine)
 
 
@@ -55,8 +92,8 @@ def _seed_db() -> None:
         conn.execute(
             text("""
             CREATE TABLE IF NOT EXISTS users (
-                id   INTEGER PRIMARY KEY,
-                name TEXT NOT NULL,
+                id    INTEGER PRIMARY KEY,
+                name  TEXT NOT NULL,
                 email TEXT NOT NULL
             )
         """)
@@ -71,7 +108,6 @@ def _seed_db() -> None:
             )
         """)
         )
-        # Only seed if empty
         if conn.execute(text("SELECT COUNT(*) FROM users")).scalar() == 0:
             conn.execute(text("INSERT INTO users VALUES (1,'Alice','alice@example.com')"))
             conn.execute(text("INSERT INTO users VALUES (2,'Bob','bob@example.com')"))
@@ -101,7 +137,7 @@ def list_users():
 
 @app.get("/users/{user_id}/orders")
 def user_orders(user_id: int):
-    """Fetch user then their orders — shows two db.query child spans in one trace."""
+    """Two queries — shows two db.query child spans in one trace."""
     with engine.connect() as conn:
         user = conn.execute(
             text("SELECT id, name FROM users WHERE id = :id"), {"id": user_id}
@@ -124,9 +160,9 @@ def user_orders(user_id: int):
 def orders_summary():
     """
     Classic N+1 demo — intentionally bad.
-    Fetch every user, then query their orders separately.
-    LatencyX will record N+2 db.query spans in this trace so you can
-    spot the pattern immediately.
+    Fetches every user then queries their orders one by one.
+    LatencyX will record N+2 db.query spans so you can spot the pattern immediately
+    in the trace waterfall.
     """
     with engine.connect() as conn:
         users = conn.execute(text("SELECT id, name FROM users")).fetchall()
@@ -144,28 +180,32 @@ def orders_summary():
 
 
 @app.get("/external")
-async def call_external():
-    """Outbound HTTP call — traced automatically by the httpx instrumentor."""
+async def call_external_httpx():
+    """Outbound HTTP via httpx — traced automatically by the httpx instrumentor."""
     with httpx.Client() as client:
         client.get("https://api.github.com/users/github")
-    return {"status": "ok"}
+    return {"status": "ok", "library": "httpx"}
+
+
+@app.get("/external-requests")
+def call_external_requests():
+    """Outbound HTTP via requests — traced automatically by the requests instrumentor."""
+    requests.get("https://api.github.com/users/github", timeout=10)
+    return {"status": "ok", "library": "requests"}
 
 
 @app.get("/custom")
 def custom_trace():
-    """Manual instrumentation for a business-logic block."""
-    with latencyx.timed(
-        "process_report", span_type="business_logic", metadata={"report": "weekly"}
-    ):  # noqa: E501
+    """Manual instrumentation for a business-logic block that isn't an HTTP call or DB query."""
+    with latencyx.timed("process_report", span_type="generic", metadata={"report": "weekly"}):
         time.sleep(0.05)
     return {"status": "done"}
 
 
 @app.get("/slow")
 def slow_endpoint():
-    """Simulates a slow DB query — useful for testing min_duration_ms filtering."""
+    """Simulates a slow operation — useful for testing min_duration_ms filtering."""
     with engine.connect() as conn:
-        # Artificial delay simulating a real slow query
         time.sleep(0.2)
         conn.execute(text("SELECT COUNT(*) FROM orders"))
     return {"status": "slow but ok"}
