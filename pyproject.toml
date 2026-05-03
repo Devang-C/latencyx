@@ -23,16 +23,18 @@ latencyx = "latencyx.cli:main"
 
 [project.optional-dependencies]
 http = ["httpx>=0.24.0"]
+requests = ["requests>=2.20.0"]
 flask = ["flask>=2.0"]
 sqlalchemy = ["sqlalchemy>=1.4", "aiosqlite>=0.19"]
 serve = ["fastapi>=0.100.0", "uvicorn>=0.24.0"]
-all = ["httpx>=0.24.0", "flask>=2.0", "sqlalchemy>=1.4", "aiosqlite>=0.19", "rich>=13.0", "typer>=0.12", "fastapi>=0.100.0", "uvicorn>=0.24.0"]
+all = ["httpx>=0.24.0", "requests>=2.20.0", "flask>=2.0", "sqlalchemy>=1.4", "aiosqlite>=0.19", "rich>=13.0", "typer>=0.12", "fastapi>=0.100.0", "uvicorn>=0.24.0"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
     "pytest-asyncio>=0.21",
     "fastapi>=0.100.0",
     "httpx>=0.24.0",
+    "requests>=2.20.0",
     "flask>=2.0",
     "sqlalchemy>=1.4",
     "aiosqlite>=0.19",
