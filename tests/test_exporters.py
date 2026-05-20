@@ -430,6 +430,85 @@ class TestSQLiteExporter:
 
         assert version == SCHEMA_VERSION
 
+    def test_retention_deletes_old_spans(self, tmp_path):
+        import sqlite3
+        import time
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        config.retention_days = 7
+
+        exporter = SQLiteExporter()
+
+        # Write a recent span
+        recent = make_span(name="recent")
+        exporter.export(recent)
+
+        # Write an old span by backdating started_at
+        old = make_span(name="old")
+        old.started_at = time.time() - (8 * 86400)  # 8 days ago
+        exporter.export(old)
+
+        # Run cleanup directly (synchronously, bypassing the background thread)
+        exporter._cleanup_old_spans()
+
+        conn = sqlite3.connect(config.sqlite_path)
+        names = [r[0] for r in conn.execute("SELECT span_name FROM spans").fetchall()]
+        conn.close()
+        exporter.close()
+
+        assert "recent" in names
+        assert "old" not in names
+
+    def test_retention_keeps_all_spans_when_none(self, tmp_path):
+        import sqlite3
+        import time
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        config.retention_days = None
+
+        exporter = SQLiteExporter()
+
+        old = make_span(name="old")
+        old.started_at = time.time() - (365 * 86400)
+        exporter.export(old)
+
+        exporter._cleanup_old_spans()  # should be a no-op
+
+        conn = sqlite3.connect(config.sqlite_path)
+        count = conn.execute("SELECT COUNT(*) FROM spans").fetchone()[0]
+        conn.close()
+        exporter.close()
+
+        assert count == 1
+
+    def test_retention_no_thread_spawned_when_none(self, tmp_path, monkeypatch):
+        import threading
+
+        from latencyx.exporters.sqlite import SQLiteExporter
+
+        spawned = []
+        original_thread = threading.Thread
+
+        def tracking_thread(*args, **kwargs):
+            spawned.append(kwargs.get("target"))
+            return original_thread(*args, **kwargs)
+
+        monkeypatch.setattr(threading, "Thread", tracking_thread)
+
+        config.sqlite_path = str(tmp_path / "traces.db")
+        config.retention_days = None
+        exporter = SQLiteExporter()
+        exporter.close()
+
+        cleanup_threads = [
+            t for t in spawned if t is not None and "cleanup" in getattr(t, "__name__", "")
+        ]
+        assert len(cleanup_threads) == 0
+
 
 # ---------------------------------------------------------------------------
 # init_exporters / export_span

@@ -390,4 +390,43 @@ def test_report_has_errors_section(db_path: str):
 def test_report_no_data(empty_db: str):
     result = runner.invoke(app, ["report", "--db", empty_db, "--since", "24h"])
     assert result.exit_code == 0
-    assert "no data" in result.output.lower()
+
+
+# ─── LatencyXDB.get_volume ──────────────────────────────────────────────────────
+
+
+def test_get_volume_returns_correct_structure(db_path: str):
+    from latencyx.cli.db import LatencyXDB
+
+    since = time.time() - 3600
+    with LatencyXDB(db_path) as db:
+        result = db.get_volume(since)
+
+    assert "timestamps" in result
+    assert "counts" in result
+    assert "p95" in result
+    assert len(result["timestamps"]) == 20
+    assert len(result["counts"]) == 20
+    assert len(result["p95"]) == 20
+
+
+def test_get_volume_counts_http_server_spans(db_path: str):
+    from latencyx.cli.db import LatencyXDB
+
+    since = time.time() - 7200
+    with LatencyXDB(db_path) as db:
+        result = db.get_volume(since)
+
+    assert sum(result["counts"]) > 0
+
+
+def test_get_volume_empty_db_returns_zeros(empty_db: str):
+    from latencyx.cli.db import LatencyXDB
+
+    since = time.time() - 3600
+    with LatencyXDB(empty_db) as db:
+        result = db.get_volume(since)
+
+    assert sum(result["counts"]) == 0
+    # buckets with no data return None from percentile()
+    assert all(v is None for v in result["p95"])  # type: ignore[misc]

@@ -34,6 +34,18 @@ def reset_latencyx_state():
     except (ImportError, AttributeError):
         pass
 
+    # Undo requests monkey-patch if it was applied during the test
+    try:
+        import latencyx.instrumentors.requests_client as rc
+
+        if rc._original_send is not None:
+            import requests
+
+            requests.Session.send = rc._original_send
+            rc._original_send = None
+    except (ImportError, AttributeError):
+        pass
+
     # Clear SQLAlchemy engine tracking so each test gets fresh instrumentation
     try:
         import latencyx.instrumentors.sqlalchemy as sa_instr

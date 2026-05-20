@@ -305,6 +305,49 @@ class LatencyXDB:
         row = cur.fetchone()
         return int(row[0]) if row else 0
 
+    def get_db_info(self, recent_window_s: float = 3600.0) -> dict:
+        now = time.time()
+        cutoff = now - recent_window_s
+
+        total = self.get_span_count()
+
+        cur = self._conn.execute("SELECT MAX(started_at) FROM spans")
+        last_seen: Optional[float] = cur.fetchone()[0]
+
+        cur = self._conn.execute("SELECT COUNT(*) FROM spans WHERE started_at >= ?", (cutoff,))
+        recent_count: int = cur.fetchone()[0]
+
+        cur = self._conn.execute(
+            "SELECT COUNT(*) FROM spans WHERE started_at >= ? AND error IS NOT NULL",
+            (cutoff,),
+        )
+        recent_errors: int = cur.fetchone()[0]
+
+        cur = self._conn.execute(
+            """
+            SELECT DISTINCT service_name FROM spans
+            WHERE service_name IS NOT NULL
+            ORDER BY service_name LIMIT 10
+            """
+        )
+        services = [r[0] for r in cur.fetchall()]
+
+        schema_version: Optional[int] = None
+        try:
+            cur = self._conn.execute("SELECT MAX(version) FROM schema_version")
+            schema_version = cur.fetchone()[0]
+        except sqlite3.OperationalError:
+            pass
+
+        return {
+            "total_spans": total,
+            "last_seen": last_seen,
+            "recent_count": recent_count,
+            "recent_errors": recent_errors,
+            "services": services,
+            "schema_version": schema_version,
+        }
+
 
 @contextmanager
 def open_db(db_path: str) -> Generator[LatencyXDB, None, None]:
